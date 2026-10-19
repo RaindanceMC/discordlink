@@ -1,0 +1,60 @@
+# Rain's Discord Link — every line this module says.
+#
+# Offered as a floor: anything an owner already has in their own messages.yml wins.
+# The "discord" lines are sent to Discord as plain text, so Discord's own **bold** works there and colour tags do not.
+discordlink:
+
+  only-a-player: "<red>Only a player in the game can link their account."
+  not-running: "<yellow>The Discord bot isn't running right now, so there's nothing to link to. Try again in a bit."
+
+  join:
+    kick: "<white><bold>You're not on the whitelist yet.</bold></white>\n\n<gray>Type this in <#5865F2>Lilly's Discord</#5865F2>:</gray>\n\n<white><bold>/link <code></bold></white>\n\n<gray>The bot whitelists you and links your account. Then just join again.\n<dark_gray>The code lasts <minutes> minutes."
+
+  link:
+    code: "<gray>Type <white><bold>/link <code></bold></white> in Lilly's Discord to link your account. <dark_gray>(lasts <minutes> minutes)"
+    already: "<gray>Your account is already linked to Discord. <white>/link unlink</white> undoes it."
+    unlinked: "<gray>Unlinked. Your Discord account and this player aren't connected anymore."
+    not-linked: "<gray>Nothing to unlink, your account isn't linked."
+    failed: "<red>Couldn't make a code right now. Try again in a moment."
+
+  linked-in-game: "<green>Linked! This player now belongs to Discord account <white><account></white>."
+
+  admin:
+    usage: "<gray>/discordlink status  ·  restart  ·  token <token>  ·  token clear <dark_gray>(token: console only)"
+    status: "<gray>Discord link bot: <white><status>"
+    restarting: "<gray>Restarting the Discord bot…"
+    console-only: "<red>The bot token only goes in from the server console, never in chat."
+    token-set: "<green>Bot token saved. The bot starts on whichever server holds the network role."
+    token-cleared: "<gray>Bot token removed. The bot stops."
+    token-failed: "<red>Couldn't save the token, the database didn't answer."
+
+  discord:
+    not-here: "This only works on Lilly's Discord server."
+    failed: "Something went wrong on our side. Try again in a minute."
+    linked: "Linked! **<player>** is now connected to your Discord account."
+    linked-whitelisted: "You're in! **<player>** is whitelisted and linked to your Discord account. Join the server again."
+    already-yours: "**<player>** is already linked to you. All good."
+    someone-elses: "**<player>** is already linked to a different Discord account. If that's wrong, ask the staff."
+    one-is-enough: "You already have an account linked (**<linked>**). One per person. If you need another one, ask the staff."
+    wrong-code: "That code doesn't work. It may have expired: join the server again to get a fresh one."
+    too-many-tries: "Too many wrong codes. Wait ten minutes and try again."
+    unlink-none: "There's nothing linked to unlink."
+    unlink-which: "You have several accounts linked (**<linked>**). Say which one: /unlink player:<name>"
+    unlink-done: "**<player>** is unlinked."
+    accounts-none: "No Minecraft account is linked to you yet. Join the server, it shows you a code for /link."
+    accounts: "Linked to you: **<linked>**"
+    whitelist-not-allowed: "Only certain roles can whitelist friends. Your friend can join and use their own code instead."
+    whitelist-java-only: "That's not a Java username. Bedrock players: join once, the server shows you a code."
+    whitelist-unknown: "There's no Java account called **<player>**. Check the spelling."
+    whitelist-already: "**<player>** is already whitelisted."
+    whitelist-done: "**<player>** is whitelisted. They can join now."
+    admin-not-allowed: "Only people who can manage the server can change this."
+    admin-no-luckperms: "LuckPerms isn't on the server that runs the bot, so there are no groups to give."
+    admin-whitelisters-pick: "Pick the roles that may whitelist friends with /whitelist:"
+    admin-whitelisters-saved: "Saved. These roles may whitelist friends: <roles>"
+    admin-map-unknown-group: "There's no LuckPerms group called **<group>**. Create it first, or check the spelling."
+    admin-mapped: "Done. Everybody with <role> gets the LuckPerms group **<group>** (checked right away and every so often)."
+    admin-unmapped: "<role> no longer gives a group. Nobody loses anything until the next check, and then only that group."
+    admin-show: "**Whitelister roles:** <whitelisters>\n**Role → group:**\n<mapping>\n**Linked Discord accounts:** <links>"
+    admin-sync-started: "Checking everybody's groups against their roles now."
+    save-failed: "Couldn't save that, the database didn't answer. Try again."

@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>de.raindancer.modules</groupId>
+        <artifactId>discordlink-build</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>discordlink-standalone</artifactId>
+    <!-- Published at the plugin's own version. -->
+    <version>${plugin.version}</version>
+    <packaging>jar</packaging>
+
+    <name>Rain's Discord Link</name>
+    <description>
+        Rain's Discord Link, as a plugin of its own: the discordlink module, JDA and the standard wrapper,
+        shaded together.
+    </description>
+
+    <properties>
+        <plugin.name>RainsDiscordLink</plugin.name>
+        <!-- 0.1.0: kick screen with a code for Discord's /link (whitelists + links), /whitelist for chosen roles,
+             Discord role → LuckPerms group, /mcadmin; one bot for the network via RainsCore's network roles. -->
+        <plugin.version>0.1.0</plugin.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>de.raindancer.modules</groupId>
+            <artifactId>discordlink-module</artifactId>
+            <!-- A new feature: not (yet) in the framework's dependencyManagement. -->
+            <version>${discordlink-module.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>de.raindancer.modules</groupId>
+            <artifactId>modules-wrapper</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>${plugin.name}-${plugin.version}</finalName>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <!-- The descriptor names the version, and a version written twice is one that drifts. -->
+                <filtering>true</filtering>
+            </resource>
+        </resources>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+            </plugin>
+            <!-- StandaloneJarTest reads the built jar, so it runs after the jar exists. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>default-test</id>
+                        <phase>none</phase>
+                    </execution>
+                    <execution>
+                        <id>after-the-jar-exists</id>
+                        <phase>integration-test</phase>
+                        <goals>
+                            <goal>test</goal>
+                        </goals>
+                        <configuration>
+                            <skipTests>false</skipTests>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

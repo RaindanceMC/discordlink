@@ -1,0 +1,500 @@
+package de.raindancer.modules.discordlink.service;
+
+import de.raindancer.core.data.store.Secrets;
+import de.raindancer.core.platform.log.LogChannel;
+import de.raindancer.core.platform.network.NetworkRoles;
+import de.raindancer.core.platform.permission.PermissionGroups;
+import de.raindancer.core.platform.util.Scheduling;
+import de.raindancer.core.ui.messages.Messages;
+import de.raindancer.modules.discordlink.DiscordLinkSettings;
+import de.raindancer.modules.discordlink.model.Link;
+import de.raindancer.modules.discordlink.model.RoleConfig;
+import de.raindancer.modules.discordlink.store.RoleConfigStore;
+import net.dv8tion.jda.api.JDA;
+import net.dv8tion.jda.api.JDABuilder;
+import net.dv8tion.jda.api.Permission;
+import net.dv8tion.jda.api.components.actionrow.ActionRow;
+import net.dv8tion.jda.api.components.selections.EntitySelectMenu;
+import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.ISnowflake;
+import net.dv8tion.jda.api.entities.Member;
+import net.dv8tion.jda.api.entities.Role;
+import net.dv8tion.jda.api.events.guild.member.GuildMemberRemoveEvent;
+import net.dv8tion.jda.api.events.guild.member.GuildMemberRoleAddEvent;
+import net.dv8tion.jda.api.events.guild.member.GuildMemberRoleRemoveEvent;
+import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
+import net.dv8tion.jda.api.events.interaction.component.EntitySelectInteractionEvent;
+import net.dv8tion.jda.api.exceptions.InvalidTokenException;
+import net.dv8tion.jda.api.hooks.ListenerAdapter;
+import net.dv8tion.jda.api.interactions.commands.DefaultMemberPermissions;
+import net.dv8tion.jda.api.interactions.commands.OptionType;
+import net.dv8tion.jda.api.interactions.commands.build.Commands;
+import net.dv8tion.jda.api.interactions.commands.build.SubcommandData;
+import net.dv8tion.jda.api.requests.GatewayIntent;
+import net.dv8tion.jda.api.utils.MemberCachePolicy;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+import org.bukkit.Server;
+import org.bukkit.entity.Player;
+import org.bukkit.plugin.Plugin;
+import org.jetbrains.annotations.NotNull;
+
+import java.util.Collection;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+
+/**
+ * The Discord side: one bot for the whole network. Every server ticks {@link #tick}; whoever holds the network role
+ * runs the bot, the others leave it be, and if that server stops another one takes over within a lease.
+ *
+ * <p>Interaction handlers defer at once and do their work on an async thread: links, codes and LuckPerms are all
+ * database I/O, and a Discord thread that blocks stops answering everybody else.
+ */
+public final class DiscordBot implements IDiscordLinkService {
+
+    public static final String ROLE = "discordlink-bot";
+    public static final String TOKEN_SECRET = "discordlink-token";
+    static final String WHITELISTERS_MENU = "discordlink:whitelisters";
+
+    private final Plugin plugin;
+    private final Server server;
+    private final Messages messages;
+    private final LogChannel log;
+    private final Secrets secrets;
+    private final Optional<NetworkRoles> leadership;
+    private final LinkService links;
+    private final RoleSyncService sync;
+    private final RoleConfigStore roles;
+    private final Whitelist whitelist;
+    private final Supplier<PermissionGroups> groups;
+
+    private volatile DiscordLinkSettings settings;
+    private volatile JDA jda;
+    private volatile String problem = "not started yet";
+    private volatile long nextSweep;
+
+    public DiscordBot(Plugin plugin, Server server, Messages messages, LogChannel log, Secrets secrets,
+                      Optional<NetworkRoles> leadership, LinkService links, RoleSyncService sync, RoleConfigStore roles,
+                      Whitelist whitelist, Supplier<PermissionGroups> groups, DiscordLinkSettings settings) {
+        this.plugin = plugin;
+        this.server = server;
+        this.messages = messages;
+        this.log = log;
+        this.secrets = secrets;
+        this.leadership = leadership;
+        this.links = links;
+        this.sync = sync;
+        this.roles = roles;
+        this.whitelist = whitelist;
+        this.groups = groups;
+        this.settings = settings;
+    }
+
+    @Override
+    public void settings(DiscordLinkSettings settings) {
+        DiscordLinkSettings before = this.settings;
+        this.settings = settings;
+        if (!before.guildId().equals(settings.guildId()) || before.enabled() != settings.enabled()) {
+            stop();   // the next tick starts it again against the new server, if it should run at all
+        }
+    }
+
+    // ---- lifecycle --------------------------------------------------------------------------
+
+    /** Every few seconds, on an async thread: run the bot if this server holds the role, stop it if not. */
+    public synchronized void tick() {
+        DiscordLinkSettings live = settings;
+        Optional<String> token = secrets.text(TOKEN_SECRET).map(String::strip).filter(t -> !t.isEmpty());
+        if (!live.enabled() || !live.hasGuild() || token.isEmpty()) {
+            problem = !live.enabled() ? "switched off in /settings" : !live.hasGuild() ? "no Discord server id in /settings"
+                    : "no bot token (console: /discordlink token <token>)";
+            stop();
+            return;
+        }
+        boolean mine = leadership.map(network -> network.claim(ROLE)).orElse(true);
+        if (!mine) {
+            problem = null;
+            stop();
+            return;
+        }
+        if (jda == null) {
+            start(token.get(), live.guildId().strip());
+        } else if (System.currentTimeMillis() >= nextSweep) {
+            sweep();
+        }
+    }
+
+    /** Whether a bot is answering somewhere in the network — the kick screen only offers a code then. */
+    public boolean runningSomewhere() {
+        if (jda != null) {
+            return true;
+        }
+        return leadership.flatMap(network -> network.holder(ROLE)).isPresent()
+                && secrets.text(TOKEN_SECRET).filter(t -> !t.isBlank()).isPresent();
+    }
+
+    public String status() {
+        String holder = leadership.flatMap(network -> network.holder(ROLE)).orElse("nobody");
+        if (jda != null) {
+            return "running here (" + jda.getSelfUser().getName() + ")";
+        }
+        return problem != null ? problem + "; bot held by " + holder : "running on " + holder;
+    }
+
+    public synchronized void restart() {
+        stop();
+        tick();
+    }
+
+    private void start(String token, String guildId) {
+        try {
+            JDA started = JDABuilder.createLight(token, EnumSet.of(GatewayIntent.GUILD_MEMBERS))
+                    .setMemberCachePolicy(MemberCachePolicy.NONE)
+                    .addEventListeners(new Events(guildId))
+                    .build();
+            started.awaitReady();
+            Guild guild = started.getGuildById(guildId);
+            if (guild == null) {
+                problem = "the bot is not on Discord server " + guildId + " — invite it first";
+                log.warn("Discord link: {}.", problem);
+                started.shutdown();
+                return;
+            }
+            jda = started;
+            problem = null;
+            registerCommands(guild);
+            nextSweep = System.currentTimeMillis() + 60_000L;
+            log.info("Discord link bot is up on '{}'.", guild.getName());
+        } catch (InvalidTokenException refused) {
+            problem = "Discord refused the bot token";
+            log.warn("Discord link: {}.", problem);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        } catch (RuntimeException failed) {
+            problem = "the bot could not start: " + failed.getMessage();
+            log.warn("Discord link: {}", problem);
+        }
+    }
+
+    public synchronized void stop() {
+        JDA running = jda;
+        jda = null;
+        if (running != null) {
+            running.shutdown();
+            leadership.ifPresent(network -> network.release(ROLE));
+            log.info("Discord link bot stopped on this server.");
+        }
+    }
+
+    private void registerCommands(Guild guild) {
+        guild.updateCommands().addCommands(
+                Commands.slash("link", "Link your Minecraft account (and get whitelisted)")
+                        .addOption(OptionType.STRING, "code", "The code the server showed you", true),
+                Commands.slash("unlink", "Unlink a Minecraft account from your Discord account")
+                        .addOption(OptionType.STRING, "player", "Which one, if you linked several", false),
+                Commands.slash("accounts", "Show the Minecraft accounts linked to your Discord account"),
+                Commands.slash("whitelist", "Whitelist a friend's Java account (special roles only)")
+                        .addOption(OptionType.STRING, "player", "Their Minecraft Java username", true),
+                Commands.slash("mcadmin", "Minecraft link settings")
+                        .setDefaultPermissions(DefaultMemberPermissions.enabledFor(Permission.MANAGE_SERVER))
+                        .addSubcommands(
+                                new SubcommandData("whitelisters", "Pick the roles that may whitelist friends"),
+                                new SubcommandData("map", "Give a LuckPerms group to everybody with a Discord role")
+                                        .addOption(OptionType.ROLE, "role", "The Discord role", true)
+                                        .addOption(OptionType.STRING, "group", "The LuckPerms group", true),
+                                new SubcommandData("unmap", "Stop giving a group for a role")
+                                        .addOption(OptionType.ROLE, "role", "The Discord role", true),
+                                new SubcommandData("show", "Show what is set up"),
+                                new SubcommandData("sync", "Check everybody's groups against their roles now"),
+                                new SubcommandData("unlink", "Unlink a Minecraft account from anybody")
+                                        .addOption(OptionType.STRING, "player", "The Minecraft username", true)))
+                .queue(ok -> { }, failed -> log.warn("Could not register the Discord commands: {}", failed.getMessage()));
+    }
+
+    // ---- sweep ------------------------------------------------------------------------------
+
+    /** Everybody's groups against their roles now; somebody no longer on the server has no roles. */
+    public void sweep() {
+        JDA running = jda;
+        Guild guild = running == null ? null : running.getGuildById(settings.guildId().strip());
+        nextSweep = System.currentTimeMillis() + settings.syncMinutes() * 60_000L;
+        if (guild == null || roles.current().groups().isEmpty()) {
+            return;
+        }
+        List<Long> ids = links.allDiscordIds().stream().map(Long::parseLong).distinct().toList();
+        if (ids.isEmpty()) {
+            return;
+        }
+        guild.retrieveMembersByIds(ids).onSuccess(members -> Scheduling.async(plugin, () -> {
+            Map<String, List<String>> byDiscord = new HashMap<>();
+            members.forEach(member -> byDiscord.put(member.getId(), roleIds(member)));
+            sync.syncAll(byDiscord);
+        })).onError(failed -> log.warn("Discord link: could not read the members for the role sync: {}", failed.getMessage()));
+    }
+
+    // ---- Discord events ---------------------------------------------------------------------
+
+    private final class Events extends ListenerAdapter {
+
+        private final String guildId;
+
+        Events(String guildId) {
+            this.guildId = guildId;
+        }
+
+        @Override
+        public void onSlashCommandInteraction(@NotNull SlashCommandInteractionEvent event) {
+            if (event.getGuild() == null || !event.getGuild().getId().equals(guildId) || event.getMember() == null) {
+                event.reply(text("discordlink.discord.not-here")).setEphemeral(true).queue();
+                return;
+            }
+            event.deferReply(true).queue();
+            Member member = event.getMember();
+            String discord = member.getId();
+            List<String> memberRoles = roleIds(member);
+            Scheduling.async(plugin, () -> {
+                String answer;
+                try {
+                    answer = switch (event.getName()) {
+                        case "link" -> link(event, discord, memberRoles);
+                        case "unlink" -> unlink(discord, option(event, "player"));
+                        case "accounts" -> accounts(discord);
+                        case "whitelist" -> whitelistFriend(member, memberRoles, option(event, "player"));
+                        case "mcadmin" -> admin(event, member);
+                        default -> text("discordlink.discord.not-here");
+                    };
+                } catch (RuntimeException failed) {
+                    log.warn("Discord link: /{} failed: {}", event.getName(), failed.getMessage());
+                    answer = text("discordlink.discord.failed");
+                }
+                if (answer != null) {
+                    event.getHook().editOriginal(answer).queue();
+                }
+            });
+        }
+
+        @Override
+        public void onEntitySelectInteraction(@NotNull EntitySelectInteractionEvent event) {
+            if (!WHITELISTERS_MENU.equals(event.getComponentId()) || event.getMember() == null
+                    || !event.getMember().hasPermission(Permission.MANAGE_SERVER)) {
+                return;
+            }
+            List<String> picked = event.getMentions().getRoles().stream().map(ISnowflake::getId).toList();
+            event.deferEdit().queue();
+            Scheduling.async(plugin, () -> {
+                boolean saved = roles.save(roles.current().withWhitelisters(picked));
+                event.getHook().editOriginal(saved
+                        ? text("discordlink.discord.admin-whitelisters-saved", "roles", mentions(picked))
+                        : text("discordlink.discord.save-failed")).setComponents().queue();
+            });
+        }
+
+        @Override
+        public void onGuildMemberRoleAdd(@NotNull GuildMemberRoleAddEvent event) {
+            changed(event.getMember());
+        }
+
+        @Override
+        public void onGuildMemberRoleRemove(@NotNull GuildMemberRoleRemoveEvent event) {
+            changed(event.getMember());
+        }
+
+        @Override
+        public void onGuildMemberRemove(@NotNull GuildMemberRemoveEvent event) {
+            String discord = event.getUser().getId();
+            Scheduling.async(plugin, () -> sync.sync(discord, List.of()));
+        }
+
+        private void changed(Member member) {
+            if (member.getGuild().getId().equals(guildId)) {
+                String discord = member.getId();
+                List<String> memberRoles = roleIds(member);
+                Scheduling.async(plugin, () -> sync.sync(discord, memberRoles));
+            }
+        }
+    }
+
+    // ---- the commands, all on an async thread -----------------------------------------------
+
+    private String link(SlashCommandInteractionEvent event, String discord, List<String> memberRoles) {
+        LinkService.Result result = links.redeem(option(event, "code"), discord, memberRoles);
+        String player = result.player() == null ? "?" : result.player();
+        switch (result.outcome()) {
+            case LINKED, LINKED_AND_WHITELISTED -> {
+                sync.sync(discord, memberRoles);
+                links.linksOf(discord).stream().filter(link -> link.name().equals(result.player())).findFirst()
+                        .ifPresent(link -> tellInGame(link.player(), "discordlink.linked-in-game", "account", event.getUser().getName()));
+                return text(result.outcome() == LinkService.Outcome.LINKED_AND_WHITELISTED
+                        ? "discordlink.discord.linked-whitelisted" : "discordlink.discord.linked", "player", player);
+            }
+            case ALREADY_YOURS -> {
+                return text("discordlink.discord.already-yours", "player", player);
+            }
+            case SOMEONE_ELSES -> {
+                return text("discordlink.discord.someone-elses", "player", player);
+            }
+            case ONE_IS_ENOUGH -> {
+                return text("discordlink.discord.one-is-enough", "linked", names(result.yours()));
+            }
+            case TOO_MANY_TRIES -> {
+                return text("discordlink.discord.too-many-tries");
+            }
+            case WRONG_CODE -> {
+                return text("discordlink.discord.wrong-code");
+            }
+            default -> {
+                return text("discordlink.discord.failed");
+            }
+        }
+    }
+
+    private String unlink(String discord, String which) {
+        List<Link> theirs = links.linksOf(discord);
+        if (theirs.isEmpty()) {
+            return text("discordlink.discord.unlink-none");
+        }
+        Optional<Link> target = which == null || which.isBlank()
+                ? (theirs.size() == 1 ? Optional.of(theirs.getFirst()) : Optional.empty())
+                : theirs.stream().filter(link -> link.name().equalsIgnoreCase(which.strip())).findFirst();
+        if (target.isEmpty()) {
+            return text("discordlink.discord.unlink-which", "linked", names(theirs));
+        }
+        sync.clear(target.get());   // the groups came with the link, so they go with it
+        links.unlink(target.get().player());
+        return text("discordlink.discord.unlink-done", "player", target.get().name());
+    }
+
+    private String accounts(String discord) {
+        List<Link> theirs = links.linksOf(discord);
+        return theirs.isEmpty() ? text("discordlink.discord.accounts-none")
+                : text("discordlink.discord.accounts", "linked", names(theirs));
+    }
+
+    private String whitelistFriend(Member member, List<String> memberRoles, String name) {
+        if (!roles.current().mayWhitelistOthers(memberRoles) && !member.hasPermission(Permission.MANAGE_SERVER)) {
+            return text("discordlink.discord.whitelist-not-allowed");
+        }
+        String wanted = name == null ? "" : name.strip();
+        if (wanted.startsWith(".") || !wanted.matches("[A-Za-z0-9_]{3,16}")) {
+            return text("discordlink.discord.whitelist-java-only");
+        }
+        var profile = server.createProfile(wanted);
+        if (!profile.complete(false) || profile.getId() == null) {   // asks Mojang; we are on an async thread
+            return text("discordlink.discord.whitelist-unknown", "player", wanted);
+        }
+        UUID id = profile.getId();
+        String exact = profile.getName() == null ? wanted : profile.getName();
+        if (whitelist.isWhitelisted(id)) {
+            return text("discordlink.discord.whitelist-already", "player", exact);
+        }
+        whitelist.add(id, exact);
+        log.info("Discord link: {} whitelisted {} from Discord.", member.getUser().getName(), exact);
+        return text("discordlink.discord.whitelist-done", "player", exact);
+    }
+
+    private String admin(SlashCommandInteractionEvent event, Member member) {
+        if (!member.hasPermission(Permission.MANAGE_SERVER)) {
+            return text("discordlink.discord.admin-not-allowed");
+        }
+        RoleConfig config = roles.current();
+        switch (String.valueOf(event.getSubcommandName())) {
+            case "whitelisters" -> {
+                EntitySelectMenu menu = EntitySelectMenu.create(WHITELISTERS_MENU, EntitySelectMenu.SelectTarget.ROLE)
+                        .setRequiredRange(0, 25)
+                        .setPlaceholder("Roles that may whitelist friends")
+                        .setDefaultValues(config.whitelisters().stream().map(EntitySelectMenu.DefaultValue::role).toList())
+                        .build();
+                event.getHook().editOriginal(text("discordlink.discord.admin-whitelisters-pick"))
+                        .setComponents(ActionRow.of(menu)).queue();
+                return null;
+            }
+            case "map" -> {
+                Role role = event.getOption("role").getAsRole();
+                String group = option(event, "group").strip().toLowerCase(java.util.Locale.ROOT);
+                PermissionGroups permissions = groups.get();
+                if (permissions == PermissionGroups.NONE) {
+                    return text("discordlink.discord.admin-no-luckperms");
+                }
+                if (!permissions.exists(group)) {
+                    return text("discordlink.discord.admin-map-unknown-group", "group", group);
+                }
+                if (!roles.save(config.mapping(role.getId(), group))) {
+                    return text("discordlink.discord.save-failed");
+                }
+                sweepSoon();
+                return text("discordlink.discord.admin-mapped", "role", role.getAsMention(), "group", group);
+            }
+            case "unmap" -> {
+                Role role = event.getOption("role").getAsRole();
+                if (!roles.save(config.mapping(role.getId(), null))) {
+                    return text("discordlink.discord.save-failed");
+                }
+                return text("discordlink.discord.admin-unmapped", "role", role.getAsMention());
+            }
+            case "show" -> {
+                String mapping = config.groups().isEmpty() ? "—" : config.groups().entrySet().stream()
+                        .map(entry -> "<@&" + entry.getKey() + "> → " + entry.getValue())
+                        .collect(Collectors.joining("\n"));
+                return text("discordlink.discord.admin-show", "whitelisters",
+                        config.whitelisters().isEmpty() ? "—" : mentions(config.whitelisters()),
+                        "mapping", mapping, "links", String.valueOf(links.allDiscordIds().size()));
+            }
+            case "sync" -> {
+                sweepSoon();
+                return text("discordlink.discord.admin-sync-started");
+            }
+            case "unlink" -> {
+                String name = option(event, "player").strip();
+                Optional<Link> found = links.byName(name);
+                if (found.isEmpty()) {
+                    return text("discordlink.discord.unlink-none");
+                }
+                sync.clear(found.get());
+                links.unlink(found.get().player());
+                return text("discordlink.discord.unlink-done", "player", found.get().name());
+            }
+            default -> {
+                return text("discordlink.discord.not-here");
+            }
+        }
+    }
+
+    private void sweepSoon() {
+        nextSweep = 0;
+    }
+
+    // ---- helpers ----------------------------------------------------------------------------
+
+    private void tellInGame(UUID player, String key, Object... values) {
+        Player online = server.getPlayer(player);
+        if (online != null) {
+            Scheduling.entity(plugin, online, () -> messages.send(online, key, values));
+        }
+    }
+
+    private static List<String> roleIds(Member member) {
+        return member.getRoles().stream().map(ISnowflake::getId).toList();
+    }
+
+    private static String option(SlashCommandInteractionEvent event, String name) {
+        var option = event.getOption(name);
+        return option == null ? null : option.getAsString();
+    }
+
+    private static String names(Collection<Link> links) {
+        return links.stream().map(Link::name).collect(Collectors.joining(", "));
+    }
+
+    private static String mentions(Collection<String> roleIds) {
+        return roleIds.stream().map(id -> "<@&" + id + ">").collect(Collectors.joining(" "));
+    }
+
+    private String text(String key, Object... values) {
+        return PlainTextComponentSerializer.plainText().serialize(messages.get(key, values));
+    }
+}

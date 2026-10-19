@@ -1,0 +1,3 @@
+# The serious wording for this module: only the lines that differ from messages.yml.
+discordlink:
+  linked-in-game: "<green>Your Discord account <white><account></white> is linked."
