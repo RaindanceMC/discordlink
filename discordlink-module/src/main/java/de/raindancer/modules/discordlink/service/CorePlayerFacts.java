@@ -73,8 +73,58 @@ public final class CorePlayerFacts implements PlayerFacts {
     @Override
     public Map<String, String> serverNames() {
         Map<String, String> names = new HashMap<>();
+        // Offline ones too: "last seen on Arena" while the arena sleeps.
+        core.networkPlayers().map(NetworkPlayers::knownServers).orElse(List.of())
+                .forEach(server -> names.put(server.id(), server.name()));
         core.networkPlayers().map(NetworkPlayers::servers).orElse(List.of())
                 .forEach((NetworkServers.Server server) -> names.put(server.id(), server.name()));
         return names;
+    }
+
+    @Override
+    public List<ServerState> network() {
+        List<NetworkServers.Known> known = core.networkPlayers().map(NetworkPlayers::knownServers).orElse(List.of());
+        if (known.isEmpty()) {
+            return PlayerFacts.super.network();
+        }
+        return known.stream().map(k -> new ServerState(k.id(), k.name(), k.online(), k.players(), k.tps(), k.mspt(),
+                k.startedAt(), k.downSince())).toList();
+    }
+
+    /** Only where an economy runs (the SMP); a server without one says nothing rather than "0". */
+    @Override
+    public Optional<String> balance(UUID player) {
+        try {
+            return de.raindancer.core.social.economy.Economies.current()
+                    .filter(economy -> economy.hasAccount(player))
+                    .map(economy -> de.raindancer.core.social.economy.Fees.format(economy.balance(player)));
+        } catch (RuntimeException unavailable) {
+            return Optional.empty();
+        }
+    }
+
+    @Override
+    public Optional<String> guild(UUID player) {
+        return de.raindancer.core.social.team.Groups.of(player).stream().findFirst()
+                .map(group -> (group.tag() == null || group.tag().isBlank() ? "" : "[" + group.tag() + "] ") + group.name());
+    }
+
+    @Override
+    public Optional<String> job(UUID player) {
+        return de.raindancer.core.social.roles.PlayerRoles.of(player).map(de.raindancer.core.social.roles.HeldRole::title);
+    }
+
+    @Override
+    public Optional<Achievements> achievements(UUID player) {
+        try {
+            var achievements = core.achievements();
+            if (achievements == null) {
+                return Optional.empty();
+            }
+            int earned = achievements.earnedBy(player).size();
+            return earned == 0 ? Optional.empty() : Optional.of(new Achievements(earned, achievements.pointsOf(player)));
+        } catch (RuntimeException unavailable) {
+            return Optional.empty();
+        }
     }
 }

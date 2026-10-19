@@ -8,7 +8,15 @@ import java.util.UUID;
  * staff show as offline.
  */
 public record PlayerCard(UUID id, String name, Optional<String> onlineOn, Optional<Long> lastSeen, Optional<String> lastServer,
-                         Optional<Long> firstSeen, long playtimeMinutes, Optional<String> rank, boolean linked) {
+                         Optional<Long> firstSeen, long playtimeMinutes, Optional<String> rank, boolean linked,
+                         Optional<String> balance, Optional<String> guild, Optional<String> job, int achievements,
+                         int achievementPoints) {
+
+    public PlayerCard(UUID id, String name, Optional<String> onlineOn, Optional<Long> lastSeen, Optional<String> lastServer,
+                      Optional<Long> firstSeen, long playtimeMinutes, Optional<String> rank, boolean linked) {
+        this(id, name, onlineOn, lastSeen, lastServer, firstSeen, playtimeMinutes, rank, linked, Optional.empty(), Optional.empty(),
+                Optional.empty(), 0, 0);
+    }
 
     public String playtimeText() {
         long hours = playtimeMinutes / 60;

@@ -23,8 +23,9 @@ public final class InfoService implements IDiscordLinkService {
     }
 
     public NetworkStatus status() {
-        return new NetworkStatus(facts.onlineCount(), facts.servers().stream()
-                .map(server -> new NetworkStatus.Line(server.name(), server.players())).toList());
+        return new NetworkStatus(facts.onlineCount(), facts.network().stream()
+                .map(s -> new NetworkStatus.Line(s.name(), s.online(), s.players(), s.tps(), s.mspt(), s.startedAt(), s.downSince()))
+                .toList());
     }
 
     public Optional<PlayerCard> card(String typed) {
@@ -46,6 +47,9 @@ public final class InfoService implements IDiscordLinkService {
                 online.map(here -> servers.getOrDefault(here.server(), here.server())),
                 online.isPresent() ? Optional.empty() : seen.map(PlayerFacts.Seen::at),
                 online.isPresent() ? Optional.empty() : seen.map(s -> servers.getOrDefault(s.server(), s.server())),
-                facts.firstSeen(player), facts.playtimeMinutes(player), facts.rank(player), facts.linked(player)));
+                facts.firstSeen(player), facts.playtimeMinutes(player), facts.rank(player), facts.linked(player),
+                facts.balance(player), facts.guild(player), facts.job(player),
+                facts.achievements(player).map(PlayerFacts.Achievements::earned).orElse(0),
+                facts.achievements(player).map(PlayerFacts.Achievements::points).orElse(0)));
     }
 }

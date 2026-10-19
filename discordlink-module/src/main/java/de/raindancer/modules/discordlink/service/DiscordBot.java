@@ -92,6 +92,8 @@ public final class DiscordBot implements IDiscordLinkService {
     private final RetryRule retry = new RetryRule();
     private final de.raindancer.modules.discordlink.rules.LookupView lookupView = new de.raindancer.modules.discordlink.rules.LookupView();
     private final LookupClient lookups = new LookupClient();
+    private final de.raindancer.modules.discordlink.rules.StatusView statusView = new de.raindancer.modules.discordlink.rules.StatusView();
+    private final de.raindancer.modules.discordlink.rules.PlayerView playerView = new de.raindancer.modules.discordlink.rules.PlayerView();
     private volatile String lookupProblemLogged;
 
     private volatile DiscordLinkSettings settings;
@@ -296,8 +298,8 @@ public final class DiscordBot implements IDiscordLinkService {
                 Commands.slash("unlink", "Unlink a Minecraft account from your Discord account")
                         .addOption(OptionType.STRING, "player", "Which one, if you linked several", false),
                 Commands.slash("accounts", "Show the Minecraft accounts linked to your Discord account"),
-                Commands.slash("status", "Who's online on the Minecraft servers right now"),
-                Commands.slash("player", "Public info about a Minecraft player")
+                Commands.slash("status", "How Lilly's Minecraft network is doing: servers, players, performance"),
+                Commands.slash("player", "A Minecraft player: online, playtime, balance, guild, job and more")
                         .addOption(OptionType.STRING, "name", "Their Minecraft name", true),
                 Commands.slash("whitelist", "Whitelist a friend's Java account (special roles only)")
                         .addOption(OptionType.STRING, "player", "Their Minecraft Java username", true),
@@ -647,17 +649,9 @@ public final class DiscordBot implements IDiscordLinkService {
         return null;
     }
 
-    /** Who's online now, stamped with when — the Refresh button below builds it again. */
+    /** The network status board, stamped with when — the Refresh button below builds it again. */
     private net.dv8tion.jda.api.entities.MessageEmbed statusEmbed() {
-        var status = info.status();
-        EmbedBuilder embed = new EmbedBuilder().setColor(EMBED_COLOUR)
-                .setTitle(text("discordlink.discord.status-title", "count", String.valueOf(status.online())));
-        if (status.servers().isEmpty()) {
-            embed.setDescription(text("discordlink.discord.status-none"));
-        }
-        status.servers().forEach(line -> embed.addField(line.name(), String.valueOf(line.players()), true));
-        embed.setFooter(text("discordlink.discord.status-footer")).setTimestamp(java.time.Instant.now());
-        return embed.build();
+        return statusView.embed(info.status(), System.currentTimeMillis());
     }
 
     private static ActionRow statusButtons() {
@@ -669,19 +663,7 @@ public final class DiscordBot implements IDiscordLinkService {
         if (card.isEmpty()) {
             return text("discordlink.discord.player-unknown", "player", String.valueOf(option(event, "name")));
         }
-        var c = card.get();
-        EmbedBuilder embed = new EmbedBuilder().setColor(EMBED_COLOUR).setTitle(c.name());
-        c.headUrl().ifPresent(embed::setThumbnail);
-        embed.addField(text("discordlink.discord.player-status"), c.onlineOn()
-                .map(server -> text("discordlink.discord.player-online", "server", server))
-                .orElseGet(() -> c.lastSeen().map(at -> text("discordlink.discord.player-last-seen", "when", "<t:" + at / 1000 + ":R>",
-                        "server", c.lastServer().orElse("?"))).orElse(text("discordlink.discord.player-never"))), false);
-        c.firstSeen().ifPresent(at -> embed.addField(text("discordlink.discord.player-first"), "<t:" + at / 1000 + ":D>", true));
-        embed.addField(text("discordlink.discord.player-playtime"), c.playtimeText(), true);
-        c.rank().ifPresent(rank -> embed.addField(text("discordlink.discord.player-rank"), rank, true));
-        embed.addField(text("discordlink.discord.player-linked"),
-                text(c.linked() ? "discordlink.discord.player-linked-yes" : "discordlink.discord.player-linked-no"), true);
-        event.getHook().editOriginalEmbeds(embed.build()).queue();
+        event.getHook().editOriginalEmbeds(playerView.embed(card.get())).queue();
         return null;
     }
 

@@ -71,6 +71,32 @@ class InfoServiceTest {
         public Map<String, String> serverNames() {
             return Map.of("smp", "Lilly's SMP", "arena", "Arena");
         }
+
+        @Override
+        public Optional<String> balance(UUID player) {
+            return player.equals(alex) ? Optional.of("342,180 coins") : Optional.empty();
+        }
+
+        @Override
+        public Optional<String> guild(UUID player) {
+            return player.equals(alex) ? Optional.of("[ELF] Elves") : Optional.empty();
+        }
+
+        @Override
+        public Optional<String> job(UUID player) {
+            return player.equals(alex) ? Optional.of("Miner") : Optional.empty();
+        }
+
+        @Override
+        public Optional<Achievements> achievements(UUID player) {
+            return player.equals(alex) ? Optional.of(new Achievements(12, 340)) : Optional.empty();
+        }
+
+        @Override
+        public List<ServerState> network() {
+            return List.of(new ServerState("smp", "Lilly's SMP", true, 1, 19.9, 12.0, 100L, 0),
+                    new ServerState("ctf", "CTF", false, 0, Double.NaN, Double.NaN, 0, 4_000L));
+        }
     };
 
     private final InfoService info = new InfoService(facts);
@@ -110,7 +136,6 @@ class InfoServiceTest {
     void status() {
         NetworkStatus status = info.status();
         assertThat(status.online()).isEqualTo(1);
-        assertThat(status.servers()).extracting(NetworkStatus.Line::name).containsExactly("Lilly's SMP", "Arena");
     }
 
     @Test
@@ -119,5 +144,27 @@ class InfoServiceTest {
         UUID floodgate = new UUID(0L, 0x0009_01F4_A3B2L);
         assertThat(new PlayerCard(floodgate, "Pocket", Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), 0,
                 Optional.empty(), false).headUrl()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("the card carries balance, guild, job and achievements where the network knows them")
+    void extras() {
+        PlayerCard alexCard = info.card("Alex").orElseThrow();
+        assertThat(alexCard.balance()).contains("342,180 coins");
+        assertThat(alexCard.guild()).contains("[ELF] Elves");
+        assertThat(alexCard.job()).contains("Miner");
+        assertThat(alexCard.achievements()).isEqualTo(12);
+        assertThat(alexCard.achievementPoints()).isEqualTo(340);
+        assertThat(info.card("Ghost").orElseThrow().balance()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("the network status lists every known server, up or down, with how it runs")
+    void networkStatus() {
+        NetworkStatus status = info.status();
+        assertThat(status.servers()).extracting(NetworkStatus.Line::name).containsExactly("Lilly's SMP", "CTF");
+        assertThat(status.servers().getFirst().tps()).isEqualTo(19.9);
+        assertThat(status.servers().get(1).online()).isFalse();
+        assertThat(status.servers().get(1).downSince()).isEqualTo(4_000L);
     }
 }
