@@ -20,17 +20,22 @@ discordlink:
   linked-in-game: "<green>Linked! This player now belongs to Discord account <white><account></white>."
 
   admin:
-    usage: "<gray>/discordlink status  ·  restart  ·  token <token>  ·  token clear <dark_gray>(token: console only)"
+    usage: "<gray>/discordlink status  ·  restart  ·  token <token>|clear  ·  lookupkey <key>|clear <dark_gray>(both console only)"
     status: "<gray>Discord link bot: <white><status>"
     restarting: "<gray>Restarting the Discord bot…"
     console-only: "<red>The bot token only goes in from the server console, never in chat."
     token-set: "<green>Bot token saved. The bot starts on whichever server holds the network role."
     token-cleared: "<gray>Bot token removed. The bot stops."
     token-failed: "<red>Couldn't save the token, the database didn't answer."
+    lookupkey-set: "<green>Lookup key saved. /lookup asks the website with it from now on."
+    lookupkey-cleared: "<gray>Lookup key removed. /lookup shows only what the server knows."
 
   discord:
     not-here: "This only works on Lilly's Discord server."
     failed: "Something went wrong on our side. Try again in a minute."
+    lookup-not-here: "/lookup only works on the staff server."
+    lookup-no-key: "Nobody by that name on the Minecraft server, and the website isn't connected yet (/discordlink lookupkey)."
+    lookup-nothing: "Nothing found for **<name>**."
     linked: "Linked! **<player>** is now connected to your Discord account."
     linked-whitelisted: "You're in! **<player>** is whitelisted and linked to your Discord account. Join the server again."
     already-yours: "**<player>** is already linked to you. All good."

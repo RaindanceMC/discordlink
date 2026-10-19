@@ -10,7 +10,7 @@ import org.bukkit.command.ConsoleCommandSender;
 import java.util.function.Supplier;
 
 /**
- * {@code /discordlink status|restart|token <token>|token clear}. The token only from the console: typed in chat it
+ * {@code /discordlink status|restart|token <token>|token clear|lookupkey <key>|lookupkey clear}. The token only from the console: typed in chat it
  * lands in the chat log and on everybody's screen who watches a stream.
  */
 public final class DiscordLinkAdminCommand implements IDiscordLinkCommand {
@@ -56,6 +56,23 @@ public final class DiscordLinkAdminCommand implements IDiscordLinkCommand {
                     if (done) {
                         live.bot().restart();
                     }
+                });
+            }
+            case "lookupkey" -> {
+                if (!(sender instanceof ConsoleCommandSender)) {
+                    live.messages().send(sender, "discordlink.admin.console-only");
+                    return;
+                }
+                if (args.length < 2) {
+                    live.messages().send(sender, "discordlink.admin.usage");
+                    return;
+                }
+                boolean clear = args[1].equalsIgnoreCase("clear");
+                Scheduling.async(live.plugin(), () -> {
+                    boolean done = clear ? live.secrets().remove(DiscordBot.LOOKUP_SECRET)
+                            : live.secrets().putText(DiscordBot.LOOKUP_SECRET, args[1].strip());
+                    live.messages().send(sender, done ? (clear ? "discordlink.admin.lookupkey-cleared" : "discordlink.admin.lookupkey-set")
+                            : "discordlink.admin.token-failed");
                 });
             }
             default -> live.messages().send(sender, "discordlink.admin.usage");

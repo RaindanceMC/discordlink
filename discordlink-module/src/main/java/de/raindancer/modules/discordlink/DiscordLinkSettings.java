@@ -41,9 +41,24 @@ public record DiscordLinkSettings(
 
         @In("discordlink") @Title("Groups checked against Discord roles, every so many minutes") @Range(min = 5, max = 1440)
         @Key("sync-minutes")
-        int syncMinutes) {
+        int syncMinutes,
 
-    public static final DiscordLinkSettings DEFAULTS = new DiscordLinkSettings(true, "", true, 30, 30);
+        @In("discordlink") @Title("Discord server for /lookup")
+        @Describe("The staff server where /lookup exists and works — nowhere else. Empty: no /lookup.")
+        @Key("lookup-guild-id")
+        String lookupGuildId,
+
+        @In("discordlink") @Title("Website /lookup asks")
+        @Describe("The applications website; its key is a secret set from the console (/discordlink lookupkey).")
+        @Key("lookup-url")
+        String lookupUrl) {
+
+    public static final DiscordLinkSettings DEFAULTS = new DiscordLinkSettings(true, "", true, 30, 30, "",
+            "https://applications.lillyyxoxo.net");
+
+    public boolean hasLookupGuild() {
+        return lookupGuildId != null && lookupGuildId.strip().matches("\\d{15,25}");
+    }
 
     public boolean hasGuild() {
         return guildId != null && guildId.strip().matches("\\d{15,25}");

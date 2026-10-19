@@ -61,7 +61,10 @@ public final class DiscordBot implements IDiscordLinkService {
 
     public static final String ROLE = "discordlink-bot";
     public static final String TOKEN_SECRET = "discordlink-token";
+    /** The applications website's LOOKUP_API_KEY, for /lookup. */
+    public static final String LOOKUP_SECRET = "discordlink-lookup-key";
     static final String WHITELISTERS_MENU = "discordlink:whitelisters";
+    static final String STATUS_REFRESH = "discordlink:status-refresh";
     /**
      * A server started with this set to "off" never runs the bot, whatever the database says. For copies of the
      * live servers (staging tests): their database copy holds the real token and settings, and a second bot on the
@@ -87,6 +90,9 @@ public final class DiscordBot implements IDiscordLinkService {
     private final InfoService info;
 
     private final RetryRule retry = new RetryRule();
+    private final de.raindancer.modules.discordlink.rules.LookupView lookupView = new de.raindancer.modules.discordlink.rules.LookupView();
+    private final LookupClient lookups = new LookupClient();
+    private volatile String lookupProblemLogged;
 
     private volatile DiscordLinkSettings settings;
     private volatile JDA jda;
@@ -123,6 +129,15 @@ public final class DiscordBot implements IDiscordLinkService {
         if (!before.guildId().equals(settings.guildId()) || before.enabled() != settings.enabled()) {
             stop();   // the next tick starts it again against the new server, if it should run at all
             freshStart();
+        } else if (!java.util.Objects.equals(before.lookupGuildId(), settings.lookupGuildId())) {
+            JDA running = jda;
+            if (running != null) {
+                Guild old = before.hasLookupGuild() ? running.getGuildById(before.lookupGuildId().strip()) : null;
+                if (old != null && !old.getId().equals(settings.guildId().strip())) {
+                    old.updateCommands().queue();   // /lookup leaves the server it was on
+                }
+                registerLookup(running);
+            }
         }
     }
 
@@ -222,6 +237,7 @@ public final class DiscordBot implements IDiscordLinkService {
             problem = null;
             freshStart();
             registerCommands(guild);
+            registerLookup(started);
             nextSweep = System.currentTimeMillis() + 60_000L;
             log.info("Discord link bot is up on '{}'.", guild.getName());
         } catch (InvalidTokenException refused) {
@@ -245,8 +261,36 @@ public final class DiscordBot implements IDiscordLinkService {
         }
     }
 
+    private static net.dv8tion.jda.api.interactions.commands.build.SlashCommandData lookupCommand() {
+        return Commands.slash("lookup", "Look somebody up: Twitch, watch time, Discord, Minecraft, applications")
+                .addOption(OptionType.STRING, "name", "A Twitch, Discord or Minecraft name (twitch:, discord:, mc: for one place)", true)
+                .addOption(OptionType.BOOLEAN, "share", "Post it in the channel instead of only for you", false);
+    }
+
+    /** /lookup on the staff server only. Lilly's own server keeps its commands as they are. */
+    private void registerLookup(JDA running) {
+        DiscordLinkSettings now = settings;
+        if (!now.hasLookupGuild() || now.lookupGuildId().strip().equals(now.guildId().strip())) {
+            return;
+        }
+        Guild staff = running.getGuildById(now.lookupGuildId().strip());
+        if (staff == null) {
+            String what = "the bot is not on the /lookup server " + now.lookupGuildId().strip() + " — invite it there";
+            if (!what.equals(lookupProblemLogged)) {
+                lookupProblemLogged = what;
+                log.warn("Discord link: {}.", what);
+            }
+            return;
+        }
+        lookupProblemLogged = null;
+        staff.updateCommands().addCommands(lookupCommand())
+                .queue(ok -> log.info("Discord link: /lookup is ready on '{}'.", staff.getName()),
+                        failed -> log.warn("Could not register /lookup: {}", failed.getMessage()));
+    }
+
     private void registerCommands(Guild guild) {
-        guild.updateCommands().addCommands(
+        var lookupHere = settings.hasLookupGuild() && settings.lookupGuildId().strip().equals(guild.getId());
+        guild.updateCommands().addCommands(lookupHere ? List.of(lookupCommand()) : List.of()).addCommands(
                 Commands.slash("link", "Link your Minecraft account (and get whitelisted)")
                         .addOption(OptionType.STRING, "code", "The code the server showed you", true),
                 Commands.slash("unlink", "Unlink a Minecraft account from your Discord account")
@@ -308,6 +352,10 @@ public final class DiscordBot implements IDiscordLinkService {
 
         @Override
         public void onSlashCommandInteraction(@NotNull SlashCommandInteractionEvent event) {
+            if (event.getName().equals("lookup")) {
+                lookup(event);
+                return;
+            }
             if (event.getGuild() == null || !event.getGuild().getId().equals(guildId) || event.getMember() == null) {
                 event.reply(text("discordlink.discord.not-here")).setEphemeral(true).queue();
                 return;
@@ -336,6 +384,22 @@ public final class DiscordBot implements IDiscordLinkService {
                 }
                 if (answer != null) {
                     event.getHook().editOriginal(answer).queue();
+                }
+            });
+        }
+
+        /** /status's Refresh: anybody may press it, it only reads. */
+        @Override
+        public void onButtonInteraction(@NotNull net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent event) {
+            if (!STATUS_REFRESH.equals(event.getComponentId())) {
+                return;
+            }
+            event.deferEdit().queue();
+            Scheduling.async(plugin, () -> {
+                try {
+                    event.getHook().editOriginalEmbeds(statusEmbed()).setComponents(statusButtons()).queue();
+                } catch (RuntimeException failed) {
+                    log.warn("Discord link: refreshing /status failed: {}", failed.getMessage());
                 }
             });
         }
@@ -542,9 +606,49 @@ public final class DiscordBot implements IDiscordLinkService {
         }
     }
 
+    // ---- /lookup (staff server only) --------------------------------------------------------
+
+    private void lookup(SlashCommandInteractionEvent event) {
+        DiscordLinkSettings now = settings;
+        if (event.getGuild() == null || !now.hasLookupGuild() || !event.getGuild().getId().equals(now.lookupGuildId().strip())) {
+            event.reply(text("discordlink.discord.lookup-not-here")).setEphemeral(true).queue();
+            return;
+        }
+        var shareOption = event.getOption("share");
+        boolean share = shareOption != null && shareOption.getAsBoolean();
+        String name = option(event, "name");
+        event.deferReply(!share).queue();
+        Scheduling.async(plugin, () -> {
+            try {
+                Optional<String> key = secrets.text(LOOKUP_SECRET).map(String::strip).filter(k -> !k.isEmpty());
+                var report = key.flatMap(k -> lookups.fetch(now.lookupUrl(), k, name));
+                String mcName = name.toLowerCase(java.util.Locale.ROOT).startsWith("mc:") ? name.substring(3).strip()
+                        : name.contains(":") ? null : name.strip();
+                var card = mcName == null ? Optional.<de.raindancer.modules.discordlink.model.PlayerCard>empty() : info.card(mcName);
+                var linkedTo = card.flatMap(c -> links.byName(c.name())).map(de.raindancer.modules.discordlink.model.Link::discord);
+                if (report.isEmpty() && card.isEmpty()) {
+                    event.getHook().editOriginal(key.isEmpty() ? text("discordlink.discord.lookup-no-key")
+                            : text("discordlink.discord.lookup-nothing", "name", name)).queue();
+                    return;
+                }
+                event.getHook().editOriginalEmbeds(lookupView.embed(report.orElse(null), card, linkedTo))
+                        .setAllowedMentions(List.of()).queue();
+            } catch (RuntimeException failed) {
+                log.warn("Discord link: /lookup failed: {}", failed.getMessage());
+                event.getHook().editOriginal(text("discordlink.discord.failed")).queue();
+            }
+        });
+    }
+
     // ---- public answers ---------------------------------------------------------------------
 
     private String status(SlashCommandInteractionEvent event) {
+        event.getHook().editOriginalEmbeds(statusEmbed()).setComponents(statusButtons()).queue();
+        return null;
+    }
+
+    /** Who's online now, stamped with when — the Refresh button below builds it again. */
+    private net.dv8tion.jda.api.entities.MessageEmbed statusEmbed() {
         var status = info.status();
         EmbedBuilder embed = new EmbedBuilder().setColor(EMBED_COLOUR)
                 .setTitle(text("discordlink.discord.status-title", "count", String.valueOf(status.online())));
@@ -552,9 +656,12 @@ public final class DiscordBot implements IDiscordLinkService {
             embed.setDescription(text("discordlink.discord.status-none"));
         }
         status.servers().forEach(line -> embed.addField(line.name(), String.valueOf(line.players()), true));
-        embed.setFooter(text("discordlink.discord.status-footer"));
-        event.getHook().editOriginalEmbeds(embed.build()).queue();
-        return null;
+        embed.setFooter(text("discordlink.discord.status-footer")).setTimestamp(java.time.Instant.now());
+        return embed.build();
+    }
+
+    private static ActionRow statusButtons() {
+        return ActionRow.of(net.dv8tion.jda.api.components.buttons.Button.secondary(STATUS_REFRESH, "🔄 Refresh"));
     }
 
     private String player(SlashCommandInteractionEvent event) {
