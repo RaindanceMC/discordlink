@@ -11,6 +11,7 @@ import de.raindancer.modules.discordlink.model.Link;
 import de.raindancer.modules.discordlink.model.RoleConfig;
 import de.raindancer.modules.discordlink.rules.RetryRule;
 import de.raindancer.modules.discordlink.store.RoleConfigStore;
+import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.Permission;
@@ -61,6 +62,16 @@ public final class DiscordBot implements IDiscordLinkService {
     public static final String ROLE = "discordlink-bot";
     public static final String TOKEN_SECRET = "discordlink-token";
     static final String WHITELISTERS_MENU = "discordlink:whitelisters";
+    /**
+     * A server started with this set to "off" never runs the bot, whatever the database says. For copies of the
+     * live servers (staging tests): their database copy holds the real token and settings, and a second bot on the
+     * same token would answer every command twice.
+     */
+    static final String OFF_VARIABLE = "RAINS_DISCORDLINK_BOT";
+    private static final boolean OFF_HERE = "off".equalsIgnoreCase(System.getenv(OFF_VARIABLE));
+
+    /** Lilly pink. */
+    static final int EMBED_COLOUR = 0xFF2E88;
 
     private final Plugin plugin;
     private final Server server;
@@ -73,6 +84,7 @@ public final class DiscordBot implements IDiscordLinkService {
     private final RoleConfigStore roles;
     private final Whitelist whitelist;
     private final Supplier<PermissionGroups> groups;
+    private final InfoService info;
 
     private final RetryRule retry = new RetryRule();
 
@@ -88,7 +100,7 @@ public final class DiscordBot implements IDiscordLinkService {
 
     public DiscordBot(Plugin plugin, Server server, Messages messages, LogChannel log, Secrets secrets,
                       Optional<NetworkRoles> leadership, LinkService links, RoleSyncService sync, RoleConfigStore roles,
-                      Whitelist whitelist, Supplier<PermissionGroups> groups, DiscordLinkSettings settings) {
+                      Whitelist whitelist, Supplier<PermissionGroups> groups, InfoService info, DiscordLinkSettings settings) {
         this.plugin = plugin;
         this.server = server;
         this.messages = messages;
@@ -100,6 +112,7 @@ public final class DiscordBot implements IDiscordLinkService {
         this.roles = roles;
         this.whitelist = whitelist;
         this.groups = groups;
+        this.info = info;
         this.settings = settings;
     }
 
@@ -117,6 +130,11 @@ public final class DiscordBot implements IDiscordLinkService {
 
     /** Every few seconds, on an async thread: run the bot if this server holds the role, stop it if not. */
     public synchronized void tick() {
+        if (OFF_HERE) {
+            problem = "switched off on this server (" + OFF_VARIABLE + "=off)";
+            stop();
+            return;
+        }
         DiscordLinkSettings live = settings;
         Optional<String> token = secrets.text(TOKEN_SECRET).map(String::strip).filter(t -> !t.isEmpty());
         if (!live.enabled() || !live.hasGuild() || token.isEmpty()) {
@@ -234,6 +252,9 @@ public final class DiscordBot implements IDiscordLinkService {
                 Commands.slash("unlink", "Unlink a Minecraft account from your Discord account")
                         .addOption(OptionType.STRING, "player", "Which one, if you linked several", false),
                 Commands.slash("accounts", "Show the Minecraft accounts linked to your Discord account"),
+                Commands.slash("status", "Who's online on the Minecraft servers right now"),
+                Commands.slash("player", "Public info about a Minecraft player")
+                        .addOption(OptionType.STRING, "name", "Their Minecraft name", true),
                 Commands.slash("whitelist", "Whitelist a friend's Java account (special roles only)")
                         .addOption(OptionType.STRING, "player", "Their Minecraft Java username", true),
                 Commands.slash("mcadmin", "Minecraft link settings")
@@ -245,6 +266,8 @@ public final class DiscordBot implements IDiscordLinkService {
                                         .addOption(OptionType.STRING, "group", "The LuckPerms group", true),
                                 new SubcommandData("unmap", "Stop giving a group for a role")
                                         .addOption(OptionType.ROLE, "role", "The Discord role", true),
+                                new SubcommandData("announce", "Where new whitelistings are announced")
+                                        .addOption(OptionType.CHANNEL, "channel", "The channel (leave out: where /link was used)", false),
                                 new SubcommandData("show", "Show what is set up"),
                                 new SubcommandData("sync", "Check everybody's groups against their roles now"),
                                 new SubcommandData("unlink", "Unlink a Minecraft account from anybody")
@@ -289,7 +312,8 @@ public final class DiscordBot implements IDiscordLinkService {
                 event.reply(text("discordlink.discord.not-here")).setEphemeral(true).queue();
                 return;
             }
-            event.deferReply(true).queue();
+            boolean everyone = event.getName().equals("status") || event.getName().equals("player");
+            event.deferReply(!everyone).queue();
             Member member = event.getMember();
             String discord = member.getId();
             List<String> memberRoles = roleIds(member);
@@ -297,6 +321,8 @@ public final class DiscordBot implements IDiscordLinkService {
                 String answer;
                 try {
                     answer = switch (event.getName()) {
+                        case "status" -> status(event);
+                        case "player" -> player(event);
                         case "link" -> link(event, discord, memberRoles);
                         case "unlink" -> unlink(discord, option(event, "player"));
                         case "accounts" -> accounts(discord);
@@ -365,6 +391,10 @@ public final class DiscordBot implements IDiscordLinkService {
                 sync.sync(discord, memberRoles);
                 links.linksOf(discord).stream().filter(link -> link.name().equals(result.player())).findFirst()
                         .ifPresent(link -> tellInGame(link.player(), "discordlink.linked-in-game", "account", event.getUser().getName()));
+                if (result.outcome() == LinkService.Outcome.LINKED_AND_WHITELISTED) {
+                    announce(event, text("discordlink.discord.welcome", "user", event.getUser().getAsMention(), "player", player),
+                            result.player());
+                }
                 return text(result.outcome() == LinkService.Outcome.LINKED_AND_WHITELISTED
                         ? "discordlink.discord.linked-whitelisted" : "discordlink.discord.linked", "player", player);
             }
@@ -430,6 +460,8 @@ public final class DiscordBot implements IDiscordLinkService {
         }
         whitelist.add(id, exact);
         log.info("Discord link: {} whitelisted {} from Discord.", member.getUser().getName(), exact);
+        announceIn(member.getGuild(), null, text("discordlink.discord.friend-welcome", "user", member.getAsMention(), "player", exact),
+                "https://mc-heads.net/avatar/" + id + "/64");
         return text("discordlink.discord.whitelist-done", "player", exact);
     }
 
@@ -472,13 +504,23 @@ public final class DiscordBot implements IDiscordLinkService {
                 }
                 return text("discordlink.discord.admin-unmapped", "role", role.getAsMention());
             }
+            case "announce" -> {
+                var channel = event.getOption("channel");
+                String id = channel == null ? null : channel.getAsChannel().getId();
+                if (!roles.save(config.announcingIn(id))) {
+                    return text("discordlink.discord.save-failed");
+                }
+                return id == null ? text("discordlink.discord.admin-announce-here")
+                        : text("discordlink.discord.admin-announce-set", "channel", "<#" + id + ">");
+            }
             case "show" -> {
                 String mapping = config.groups().isEmpty() ? "—" : config.groups().entrySet().stream()
                         .map(entry -> "<@&" + entry.getKey() + "> → " + entry.getValue())
                         .collect(Collectors.joining("\n"));
                 return text("discordlink.discord.admin-show", "whitelisters",
                         config.whitelisters().isEmpty() ? "—" : mentions(config.whitelisters()),
-                        "mapping", mapping, "links", String.valueOf(links.allDiscordIds().size()));
+                        "mapping", mapping, "links", String.valueOf(links.allDiscordIds().size()),
+                        "announce", config.announceChannel() == null ? "where /link is used" : "<#" + config.announceChannel() + ">");
             }
             case "sync" -> {
                 sweepSoon();
@@ -498,6 +540,67 @@ public final class DiscordBot implements IDiscordLinkService {
                 return text("discordlink.discord.not-here");
             }
         }
+    }
+
+    // ---- public answers ---------------------------------------------------------------------
+
+    private String status(SlashCommandInteractionEvent event) {
+        var status = info.status();
+        EmbedBuilder embed = new EmbedBuilder().setColor(EMBED_COLOUR)
+                .setTitle(text("discordlink.discord.status-title", "count", String.valueOf(status.online())));
+        if (status.servers().isEmpty()) {
+            embed.setDescription(text("discordlink.discord.status-none"));
+        }
+        status.servers().forEach(line -> embed.addField(line.name(), String.valueOf(line.players()), true));
+        embed.setFooter(text("discordlink.discord.status-footer"));
+        event.getHook().editOriginalEmbeds(embed.build()).queue();
+        return null;
+    }
+
+    private String player(SlashCommandInteractionEvent event) {
+        var card = info.card(option(event, "name"));
+        if (card.isEmpty()) {
+            return text("discordlink.discord.player-unknown", "player", String.valueOf(option(event, "name")));
+        }
+        var c = card.get();
+        EmbedBuilder embed = new EmbedBuilder().setColor(EMBED_COLOUR).setTitle(c.name());
+        c.headUrl().ifPresent(embed::setThumbnail);
+        embed.addField(text("discordlink.discord.player-status"), c.onlineOn()
+                .map(server -> text("discordlink.discord.player-online", "server", server))
+                .orElseGet(() -> c.lastSeen().map(at -> text("discordlink.discord.player-last-seen", "when", "<t:" + at / 1000 + ":R>",
+                        "server", c.lastServer().orElse("?"))).orElse(text("discordlink.discord.player-never"))), false);
+        c.firstSeen().ifPresent(at -> embed.addField(text("discordlink.discord.player-first"), "<t:" + at / 1000 + ":D>", true));
+        embed.addField(text("discordlink.discord.player-playtime"), c.playtimeText(), true);
+        c.rank().ifPresent(rank -> embed.addField(text("discordlink.discord.player-rank"), rank, true));
+        embed.addField(text("discordlink.discord.player-linked"),
+                text(c.linked() ? "discordlink.discord.player-linked-yes" : "discordlink.discord.player-linked-no"), true);
+        event.getHook().editOriginalEmbeds(embed.build()).queue();
+        return null;
+    }
+
+    /** A new whitelisting, said where everybody sees it: the configured channel, else where /link was used. */
+    private void announce(SlashCommandInteractionEvent event, String line, String playerName) {
+        String head = links.byName(playerName).map(link -> "https://mc-heads.net/avatar/" + link.player() + "/64").orElse(null);
+        announceIn(event.getGuild(), event.getChannel().getId(), line, head);
+    }
+
+    private void announceIn(Guild guild, String fallbackChannel, String line, String head) {
+        if (guild == null) {
+            return;
+        }
+        String id = roles.current().announceChannel() != null ? roles.current().announceChannel() : fallbackChannel;
+        var channel = id == null ? null : guild.getChannelById(net.dv8tion.jda.api.entities.channel.middleman.GuildMessageChannel.class, id);
+        if (channel == null || !channel.canTalk()) {
+            log.warn("Discord link: can't post the welcome in channel {} (gone, or the bot may not write there).", id);
+            return;
+        }
+        EmbedBuilder embed = new EmbedBuilder().setColor(EMBED_COLOUR).setDescription(line);
+        if (head != null) {
+            embed.setThumbnail(head);
+        }
+        // The mention reads as a name; it doesn't ping anybody.
+        channel.sendMessageEmbeds(embed.build()).setAllowedMentions(List.of()).queue(ok -> { },
+                failed -> log.warn("Discord link: the welcome could not be posted: {}", failed.getMessage()));
     }
 
     private void sweepSoon() {

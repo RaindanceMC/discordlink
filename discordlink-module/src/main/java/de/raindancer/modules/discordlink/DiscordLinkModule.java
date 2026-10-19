@@ -13,6 +13,8 @@ import de.raindancer.modules.discordlink.rules.LinkRule;
 import de.raindancer.modules.discordlink.rules.RoleSyncRule;
 import de.raindancer.modules.discordlink.service.BukkitWhitelist;
 import de.raindancer.modules.discordlink.service.CodeService;
+import de.raindancer.modules.discordlink.service.CorePlayerFacts;
+import de.raindancer.modules.discordlink.service.InfoService;
 import de.raindancer.modules.discordlink.service.DiscordBot;
 import de.raindancer.modules.discordlink.service.LinkService;
 import de.raindancer.modules.discordlink.service.RoleSyncService;
@@ -29,7 +31,7 @@ import java.util.List;
  */
 public final class DiscordLinkModule implements FlexModule {
 
-    private static final ModuleInfo INFO = ModuleInfo.of("discordlink", "Discord Link", "0.1.1")
+    private static final ModuleInfo INFO = ModuleInfo.of("discordlink", "Discord Link", "0.2.0")
             .describedAs("Whitelisting and account links through Discord's /link; Discord roles give LuckPerms groups")
             .by("Raindancer118");
 
@@ -62,7 +64,7 @@ public final class DiscordLinkModule implements FlexModule {
         RoleSyncService sync = new RoleSyncService(() -> context.core().groups(), roles, store, new RoleSyncRule(), context.log());
         bot = new DiscordBot(context.plugin(), context.plugin().getServer(), context.core().messages(), context.log(),
                 context.core().secrets(), context.core().networkRoles(), links, sync, roles, whitelist,
-                () -> context.core().groups(), settings.current());
+                () -> context.core().groups(), new InfoService(new CorePlayerFacts(context.core(), store)), settings.current());
         settings.onChange(codes::settings);
         settings.onChange(links::settings);
         settings.onChange(sync::settings);

@@ -45,7 +45,8 @@ public final class RoleConfigStore {
                     }
                 }
             }
-            current = new RoleConfig(whitelisters, groups);
+            String announce = yaml.getString("announce-channel", "");
+            current = new RoleConfig(whitelisters, groups, announce.isBlank() ? null : announce);
         });
     }
 
@@ -55,6 +56,7 @@ public final class RoleConfigStore {
             yaml.set("whitelister-roles", config.whitelisters().stream().sorted().toList());
             yaml.set("role-groups", null);
             config.groups().forEach((role, group) -> yaml.set("role-groups." + role, group));
+            yaml.set("announce-channel", config.announceChannel());
         });
         if (written) {
             current = config;

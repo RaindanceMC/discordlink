@@ -27,7 +27,8 @@
              Discord role → LuckPerms group, /mcadmin; one bot for the network via RainsCore's network roles. -->
         <!-- 0.1.1: a bot that can't start waits longer each time (30 s up to 30 min) and says each problem once,
              instead of a Discord login every 5 seconds. -->
-        <plugin.version>0.1.1</plugin.version>
+        <!-- 0.2.0: /status and /player (public), a public welcome for every new whitelisting, /mcadmin announce. -->
+        <plugin.version>0.2.0</plugin.version>
     </properties>
 
     <dependencies>

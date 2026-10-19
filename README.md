@@ -19,5 +19,8 @@ Lilly's Discord and her Minecraft servers, joined.
 In game: `/link` (a code for an already whitelisted player), `/link unlink`; `/discordlink status|restart`.
 Discord: `/link`, `/unlink`, `/accounts`, `/whitelist`, `/mcadmin …` (Manage Server).
 
+A test server started from a copy of the live data must run with `RAINS_DISCORDLINK_BOT=off`: the copy holds the
+real token, and a second bot on it would answer every command twice.
+
 ## Build
 `mvn install` — module tests (SQLite, and Postgres in CI), then the shaded plugin and its jar test.
