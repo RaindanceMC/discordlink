@@ -25,7 +25,9 @@
         <plugin.name>RainsDiscordLink</plugin.name>
         <!-- 0.1.0: kick screen with a code for Discord's /link (whitelists + links), /whitelist for chosen roles,
              Discord role → LuckPerms group, /mcadmin; one bot for the network via RainsCore's network roles. -->
-        <plugin.version>0.1.0</plugin.version>
+        <!-- 0.1.1: a bot that can't start waits longer each time (30 s up to 30 min) and says each problem once,
+             instead of a Discord login every 5 seconds. -->
+        <plugin.version>0.1.1</plugin.version>
     </properties>
 
     <dependencies>

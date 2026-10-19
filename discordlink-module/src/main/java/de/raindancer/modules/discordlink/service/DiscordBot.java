@@ -9,6 +9,7 @@ import de.raindancer.core.ui.messages.Messages;
 import de.raindancer.modules.discordlink.DiscordLinkSettings;
 import de.raindancer.modules.discordlink.model.Link;
 import de.raindancer.modules.discordlink.model.RoleConfig;
+import de.raindancer.modules.discordlink.rules.RetryRule;
 import de.raindancer.modules.discordlink.store.RoleConfigStore;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
@@ -73,10 +74,17 @@ public final class DiscordBot implements IDiscordLinkService {
     private final Whitelist whitelist;
     private final Supplier<PermissionGroups> groups;
 
+    private final RetryRule retry = new RetryRule();
+
     private volatile DiscordLinkSettings settings;
     private volatile JDA jda;
     private volatile String problem = "not started yet";
     private volatile long nextSweep;
+    /** Failed starts in a row, and when the next one may be tried: every try is a Discord login. */
+    private int failures;
+    private long nextAttempt;
+    private String lastLogged;
+    private int triedToken;
 
     public DiscordBot(Plugin plugin, Server server, Messages messages, LogChannel log, Secrets secrets,
                       Optional<NetworkRoles> leadership, LinkService links, RoleSyncService sync, RoleConfigStore roles,
@@ -101,6 +109,7 @@ public final class DiscordBot implements IDiscordLinkService {
         this.settings = settings;
         if (!before.guildId().equals(settings.guildId()) || before.enabled() != settings.enabled()) {
             stop();   // the next tick starts it again against the new server, if it should run at all
+            freshStart();
         }
     }
 
@@ -123,7 +132,18 @@ public final class DiscordBot implements IDiscordLinkService {
             return;
         }
         if (jda == null) {
+            if (token.get().hashCode() != triedToken) {
+                freshStart();   // a new token deserves a try at once
+                triedToken = token.get().hashCode();
+            }
+            if (System.currentTimeMillis() < nextAttempt) {
+                return;
+            }
             start(token.get(), live.guildId().strip());
+            if (jda == null) {
+                failures++;
+                nextAttempt = System.currentTimeMillis() + retry.delayMillisAfter(failures);
+            }
         } else if (System.currentTimeMillis() >= nextSweep) {
             sweep();
         }
@@ -148,7 +168,23 @@ public final class DiscordBot implements IDiscordLinkService {
 
     public synchronized void restart() {
         stop();
+        freshStart();
         tick();
+    }
+
+    private void freshStart() {
+        failures = 0;
+        nextAttempt = 0;
+        lastLogged = null;
+    }
+
+    /** Once per problem, not once per try: a failing bot would otherwise fill the console. */
+    private void report(String what) {
+        problem = what;
+        if (!what.equals(lastLogged)) {
+            lastLogged = what;
+            log.warn("Discord link: {} (trying again later, waiting longer each time; /discordlink restart tries now).", what);
+        }
     }
 
     private void start(String token, String guildId) {
@@ -160,24 +196,24 @@ public final class DiscordBot implements IDiscordLinkService {
             started.awaitReady();
             Guild guild = started.getGuildById(guildId);
             if (guild == null) {
-                problem = "the bot is not on Discord server " + guildId + " — invite it first";
-                log.warn("Discord link: {}.", problem);
+                report("the bot is not on Discord server " + guildId + " — invite it first");
                 started.shutdown();
                 return;
             }
             jda = started;
             problem = null;
+            freshStart();
             registerCommands(guild);
             nextSweep = System.currentTimeMillis() + 60_000L;
             log.info("Discord link bot is up on '{}'.", guild.getName());
         } catch (InvalidTokenException refused) {
-            problem = "Discord refused the bot token";
-            log.warn("Discord link: {}.", problem);
+            report("Discord refused the bot token");
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
         } catch (RuntimeException failed) {
-            problem = "the bot could not start: " + failed.getMessage();
-            log.warn("Discord link: {}", problem);
+            String reason = String.valueOf(failed.getMessage());
+            report(reason.contains("intent") ? "the Server Members Intent is off in the Discord developer portal"
+                    : "the bot could not start: " + reason.lines().reduce((a, b) -> b).orElse(reason));
         }
     }
 
