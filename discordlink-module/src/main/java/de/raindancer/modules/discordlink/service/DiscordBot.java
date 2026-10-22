@@ -128,14 +128,17 @@ public final class DiscordBot implements IDiscordLinkService {
     public void settings(DiscordLinkSettings settings) {
         DiscordLinkSettings before = this.settings;
         this.settings = settings;
-        if (!before.guildId().equals(settings.guildId()) || before.enabled() != settings.enabled()) {
+        if (!before.guildId().equals(settings.guildId()) || before.enabled() != settings.enabled()
+                || !before.moreLinkGuilds().equals(settings.moreLinkGuilds())) {
             stop();   // the next tick starts it again against the new server, if it should run at all
             freshStart();
         } else if (!java.util.Objects.equals(before.lookupGuildId(), settings.lookupGuildId())) {
             JDA running = jda;
             if (running != null) {
                 Guild old = before.hasLookupGuild() ? running.getGuildById(before.lookupGuildId().strip()) : null;
-                if (old != null && !old.getId().equals(settings.guildId().strip())) {
+                if (old != null && settings.isLinkGuild(old.getId())) {
+                    registerCommands(old);   // /lookup leaves, the link commands stay
+                } else if (old != null) {
                     old.updateCommands().queue();   // /lookup leaves the server it was on
                 }
                 registerLookup(running);
@@ -239,6 +242,7 @@ public final class DiscordBot implements IDiscordLinkService {
             problem = null;
             freshStart();
             registerCommands(guild);
+            registerMoreLinkGuilds(started);
             registerLookup(started);
             nextSweep = System.currentTimeMillis() + 60_000L;
             log.info("Discord link bot is up on '{}'.", guild.getName());
@@ -272,8 +276,8 @@ public final class DiscordBot implements IDiscordLinkService {
     /** /lookup on the staff server only. Lilly's own server keeps its commands as they are. */
     private void registerLookup(JDA running) {
         DiscordLinkSettings now = settings;
-        if (!now.hasLookupGuild() || now.lookupGuildId().strip().equals(now.guildId().strip())) {
-            return;
+        if (!now.hasLookupGuild() || now.isLinkGuild(now.lookupGuildId().strip())) {
+            return;   // registerCommands put /lookup there along with the rest
         }
         Guild staff = running.getGuildById(now.lookupGuildId().strip());
         if (staff == null) {
@@ -290,8 +294,22 @@ public final class DiscordBot implements IDiscordLinkService {
                         failed -> log.warn("Could not register /lookup: {}", failed.getMessage()));
     }
 
+    /** The other servers /link works on. One the bot is not on is said once and skipped; the rest still run. */
+    private void registerMoreLinkGuilds(JDA running) {
+        for (String id : settings.moreLinkGuilds()) {
+            Guild guild = running.getGuildById(id);
+            if (guild == null) {
+                log.warn("Discord link: the bot is not on Discord server {} (more servers for /link) — invite it there.", id);
+                continue;
+            }
+            registerCommands(guild);
+            log.info("Discord link: /link is ready on '{}' too.", guild.getName());
+        }
+    }
+
     private void registerCommands(Guild guild) {
         var lookupHere = settings.hasLookupGuild() && settings.lookupGuildId().strip().equals(guild.getId());
+        boolean main = guild.getId().equals(settings.guildId().strip());
         guild.updateCommands().addCommands(lookupHere ? List.of(lookupCommand()) : List.of()).addCommands(
                 Commands.slash("link", "Link your Minecraft account (and get whitelisted)")
                         .addOption(OptionType.STRING, "code", "The code the server showed you", true),
@@ -302,8 +320,15 @@ public final class DiscordBot implements IDiscordLinkService {
                 Commands.slash("player", "A Minecraft player: online, playtime, balance, guild, job and more")
                         .addOption(OptionType.STRING, "name", "Their Minecraft name", true),
                 Commands.slash("whitelist", "Whitelist a friend's Java account (special roles only)")
-                        .addOption(OptionType.STRING, "player", "Their Minecraft Java username", true),
-                Commands.slash("mcadmin", "Minecraft link settings")
+                        .addOption(OptionType.STRING, "player", "Their Minecraft Java username", true))
+                .addCommands(main ? List.of(mcadminCommand()) : List.of())
+                .queue(ok -> { }, failed -> log.warn("Could not register the Discord commands on '{}': {}",
+                        guild.getName(), failed.getMessage()));
+    }
+
+    /** Lilly's server only: roles and channels it picks are hers. */
+    private static net.dv8tion.jda.api.interactions.commands.build.SlashCommandData mcadminCommand() {
+        return Commands.slash("mcadmin", "Minecraft link settings")
                         .setDefaultPermissions(DefaultMemberPermissions.enabledFor(Permission.MANAGE_SERVER))
                         .addSubcommands(
                                 new SubcommandData("whitelisters", "Pick the roles that may whitelist friends"),
@@ -317,8 +342,7 @@ public final class DiscordBot implements IDiscordLinkService {
                                 new SubcommandData("show", "Show what is set up"),
                                 new SubcommandData("sync", "Check everybody's groups against their roles now"),
                                 new SubcommandData("unlink", "Unlink a Minecraft account from anybody")
-                                        .addOption(OptionType.STRING, "player", "The Minecraft username", true)))
-                .queue(ok -> { }, failed -> log.warn("Could not register the Discord commands: {}", failed.getMessage()));
+                                        .addOption(OptionType.STRING, "player", "The Minecraft username", true));
     }
 
     // ---- sweep ------------------------------------------------------------------------------
@@ -358,25 +382,29 @@ public final class DiscordBot implements IDiscordLinkService {
                 lookup(event);
                 return;
             }
-            if (event.getGuild() == null || !event.getGuild().getId().equals(guildId) || event.getMember() == null) {
+            boolean here = event.getGuild() != null && event.getMember() != null;
+            boolean main = here && event.getGuild().getId().equals(guildId);
+            if (!here || !settings.isLinkGuild(event.getGuild().getId()) || (!main && event.getName().equals("mcadmin"))) {
                 event.reply(text("discordlink.discord.not-here")).setEphemeral(true).queue();
                 return;
             }
             boolean everyone = event.getName().equals("status") || event.getName().equals("player");
             event.deferReply(!everyone).queue();
-            Member member = event.getMember();
-            String discord = member.getId();
-            List<String> memberRoles = roleIds(member);
+            Member used = event.getMember();
+            String discord = used.getId();
             Scheduling.async(plugin, () -> {
                 String answer;
                 try {
+                    // Roles and Manage Server count on Lilly's server only, wherever the command was used.
+                    Member member = main ? used : homeMember(event.getJDA(), discord);
+                    List<String> memberRoles = member == null ? List.of() : roleIds(member);
                     answer = switch (event.getName()) {
                         case "status" -> status(event);
                         case "player" -> player(event);
                         case "link" -> link(event, discord, memberRoles);
                         case "unlink" -> unlink(discord, option(event, "player"));
                         case "accounts" -> accounts(discord);
-                        case "whitelist" -> whitelistFriend(member, memberRoles, option(event, "player"));
+                        case "whitelist" -> whitelistFriend(event, member, memberRoles, option(event, "player"));
                         case "mcadmin" -> admin(event, member);
                         default -> text("discordlink.discord.not-here");
                     };
@@ -434,6 +462,9 @@ public final class DiscordBot implements IDiscordLinkService {
 
         @Override
         public void onGuildMemberRemove(@NotNull GuildMemberRemoveEvent event) {
+            if (!event.getGuild().getId().equals(guildId)) {
+                return;   // leaving the staff server or another /link server takes no groups away
+            }
             String discord = event.getUser().getId();
             Scheduling.async(plugin, () -> sync.sync(discord, List.of()));
         }
@@ -507,8 +538,9 @@ public final class DiscordBot implements IDiscordLinkService {
                 : text("discordlink.discord.accounts", "linked", names(theirs));
     }
 
-    private String whitelistFriend(Member member, List<String> memberRoles, String name) {
-        if (!roles.current().mayWhitelistOthers(memberRoles) && !member.hasPermission(Permission.MANAGE_SERVER)) {
+    private String whitelistFriend(SlashCommandInteractionEvent event, Member member, List<String> memberRoles, String name) {
+        if (member == null
+                || (!roles.current().mayWhitelistOthers(memberRoles) && !member.hasPermission(Permission.MANAGE_SERVER))) {
             return text("discordlink.discord.whitelist-not-allowed");
         }
         String wanted = name == null ? "" : name.strip();
@@ -526,7 +558,8 @@ public final class DiscordBot implements IDiscordLinkService {
         }
         whitelist.add(id, exact);
         log.info("Discord link: {} whitelisted {} from Discord.", member.getUser().getName(), exact);
-        announceIn(member.getGuild(), null, text("discordlink.discord.friend-welcome", "user", member.getAsMention(), "player", exact),
+        announceIn(event.getGuild(), event.getGuild().getId().equals(settings.guildId().strip()) ? null
+                : event.getChannel().getId(), text("discordlink.discord.friend-welcome", "user", member.getAsMention(), "player", exact),
                 "https://mc-heads.net/avatar/" + id + "/64");
         return text("discordlink.discord.whitelist-done", "player", exact);
     }
@@ -678,7 +711,9 @@ public final class DiscordBot implements IDiscordLinkService {
             return;
         }
         String id = roles.current().announceChannel() != null ? roles.current().announceChannel() : fallbackChannel;
-        var channel = id == null ? null : guild.getChannelById(net.dv8tion.jda.api.entities.channel.middleman.GuildMessageChannel.class, id);
+        // The picked channel is on Lilly's server even when /link was used on another one.
+        var channel = id == null ? null
+                : guild.getJDA().getChannelById(net.dv8tion.jda.api.entities.channel.middleman.GuildMessageChannel.class, id);
         if (channel == null || !channel.canTalk()) {
             log.warn("Discord link: can't post the welcome in channel {} (gone, or the bot may not write there).", id);
             return;
@@ -702,6 +737,23 @@ public final class DiscordBot implements IDiscordLinkService {
         Player online = server.getPlayer(player);
         if (online != null) {
             Scheduling.entity(plugin, online, () -> messages.send(online, key, values));
+        }
+    }
+
+    /** Somebody as a member of Lilly's server, or null if they aren't on it. Blocks: async threads only. */
+    private Member homeMember(JDA running, String discord) {
+        Guild home = running.getGuildById(settings.guildId().strip());
+        if (home == null) {
+            return null;
+        }
+        try {
+            return home.retrieveMemberById(discord).complete();
+        } catch (net.dv8tion.jda.api.exceptions.ErrorResponseException failed) {
+            // Only "not a member" means no roles; anything else must not read as that, or the sync takes groups away.
+            if (failed.getErrorResponse() == net.dv8tion.jda.api.requests.ErrorResponse.UNKNOWN_MEMBER) {
+                return null;
+            }
+            throw failed;
         }
     }
 

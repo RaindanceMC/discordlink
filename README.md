@@ -7,6 +7,9 @@ Lilly's Discord and her Minecraft servers, joined.
 - **One account per person**, unless they hold a role the Discord admins picked; those may also `/whitelist <friend>`.
 - **Discord roles → LuckPerms groups**, one way, on link, on every role change and every `sync-minutes`.
   Only mapped groups are ever touched.
+- **More servers for `/link`** (`more-link-guild-ids`): `/link`, `/unlink`, `/accounts`, `/whitelist`, `/status`
+  and `/player` work there too. Roles, groups and `/mcadmin` stay Lilly's: whitelister roles and LuckPerms groups
+  come from somebody's roles on her server, and only leaving her server takes groups away.
 - **One bot for the network.** Every server ticks; whoever holds RainsCore's network role `discordlink-bot` runs it,
   and another server takes over within a lease if that one stops.
 
