@@ -20,7 +20,9 @@
 
     <!-- This repository's own versions: bump them here. CI publishes a new version on the next push to master. -->
     <properties>
-        <discordlink-module.version>0.5.0</discordlink-module.version>
+        <discordlink-module.version>0.6.0</discordlink-module.version>
+        <rainscore.version>2.4.0</rainscore.version>
+        <modules-wrapper.version>1.9.0</modules-wrapper.version>
     </properties>
 
     <modules>

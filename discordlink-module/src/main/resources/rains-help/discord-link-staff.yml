@@ -1,0 +1,42 @@
+id: discord-link-staff
+title: Discord link (staff)
+summary: The Discord bot — token, status, restart, roles to groups, whitelisters and lookup.
+intro: |
+  The bot runs on exactly one server of the network at a time, and quietly moves house when that server stops. Here is how to feed it and steer it.
+icon: COMMAND_BLOCK
+category: Staff
+order: 30
+module: discordlink
+permission: rains.discordlink.admin
+aliases: [discordlink, mcadmin, lookup, discordbot]
+keywords: [bot, token, restart, lookup, roles, luckperms, groups, whitelisters, announce, guild]
+commands: [discordlink]
+related: [discord-link]
+sections:
+  - question: How do I set up the bot?
+    title: Setting it up
+    text: |
+      Create the bot in Discord's developer portal, switch the <white>Server Members Intent</white> on, invite it, and put the server id into {run:/settings} (<white>discordlink</white>, currently {if:discordlink:guild-id}<green>set</green>{else}<red>empty</red>{/if}). The token goes in from the <i>console</i> only: {cmd:/discordlink token <token>}. Typed in chat it would end up in the chat log, so the command refuses. {cmd:/discordlink token clear} removes it and stops the bot.
+      The bot is {setting:discordlink:enabled|onoff}.
+  - question: How do I check or restart the bot?
+    title: Status & restart
+    text: |
+      {run:/discordlink status} says what it does and where it runs (or why it does not). {run:/discordlink restart} restarts it. A bot that fails to start retries with growing pauses — Discord resets a token after too many logins in a day, so it does not hammer.
+  - question: Where do its commands exist?
+    title: Servers & answers
+    text: |
+      Commands exist on the main server (<white>guild-id</white>) and on every server in <white>more-link-guild-ids</white> — there <white>/link /unlink /accounts /whitelist /status /player</white> work, but roles and groups always come from the main server. <white>/lookup</white> exists only on the <white>lookup-guild-id</white> server (empty = no /lookup) and asks the website {setting:discordlink:lookup-url}; its key goes in from the console: {cmd:/discordlink lookupkey <key>} or {cmd:/discordlink lookupkey clear}.
+  - question: How do codes and the kick screen work?
+    title: Codes
+    text: |
+      Join codes on the kick screen: {setting:discordlink:join-codes|onoff}. A code lasts {setting:discordlink:code-minutes|minutes}. Codes only appear while a bot answers somewhere in the network (a code nobody can redeem is worse than the plain message), and never for operators.
+  - question: How do roles become groups?
+    title: Roles to groups
+    text: |
+      On the main Discord, with <white>Manage Server</white>:
+      <white>/mcadmin map</white> <i>role group</i> — everybody with the role gets the LuckPerms group (it must exist).
+      <white>/mcadmin unmap</white> <i>role</i> — stops giving it; nobody loses anything until the next check, and then only that group.
+      <white>/mcadmin sync</white> — check everybody now. Otherwise it happens on every role change and every {setting:discordlink:sync-minutes|minutes}.
+      <white>/mcadmin whitelisters</white> — pick the roles that may link several accounts and use /whitelist.
+      <white>/mcadmin announce</white> <i>[channel]</i> — where new whitelistings are announced (without a channel: where /link was used).
+      <white>/mcadmin show</white> — what is set up. <white>/mcadmin unlink</white> <i>player</i> — unlink anybody.

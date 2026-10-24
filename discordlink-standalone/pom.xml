@@ -31,7 +31,7 @@
         <!-- 0.5.0: more Discord servers for /link (more-link-guild-ids); roles and groups still from Lilly's server
              only, and leaving the staff or another server no longer takes groups away. -->
         <!-- 0.4.0: /status is a network status board (every server up or down, TPS, tick time, uptime), /player shows balance, guild, job and achievements. Needs RainsCore with NetworkServers.known. 0.3.0: /status has a Refresh button and shows when it was taken; /lookup on one staff server only (lookup-guild-id): the applications website's lookup (key: /discordlink lookupkey) plus the server's own stats and who the account is linked to. -->
-        <plugin.version>0.5.0</plugin.version>
+        <plugin.version>0.6.0</plugin.version>
     </properties>
 
     <dependencies>

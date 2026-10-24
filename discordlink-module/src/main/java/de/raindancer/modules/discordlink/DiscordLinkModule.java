@@ -31,7 +31,7 @@ import java.util.List;
  */
 public final class DiscordLinkModule implements FlexModule {
 
-    private static final ModuleInfo INFO = ModuleInfo.of("discordlink", "Discord Link", "0.5.0")
+    private static final ModuleInfo INFO = ModuleInfo.of("discordlink", "Discord Link", "0.6.0")
             .describedAs("Whitelisting and account links through Discord's /link; Discord roles give LuckPerms groups")
             .by("Raindancer118");
 
