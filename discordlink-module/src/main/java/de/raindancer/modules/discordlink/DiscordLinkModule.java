@@ -31,7 +31,7 @@ import java.util.List;
  */
 public final class DiscordLinkModule implements FlexModule {
 
-    private static final ModuleInfo INFO = ModuleInfo.of("discordlink", "Discord Link", "0.6.0")
+    private static final ModuleInfo INFO = ModuleInfo.of("discordlink", "Discord Link", "0.7.0")
             .describedAs("Whitelisting and account links through Discord's /link; Discord roles give LuckPerms groups")
             .by("Raindancer118");
 
@@ -74,6 +74,19 @@ public final class DiscordLinkModule implements FlexModule {
                 context.core().messages(), settings::current, context.core().secrets(), codes, links, bot);
         context.listener(new JoinGateListener(services));
         DiscordLinkCommands.ready(services);
+        // Screens for /screen — Core 2.10.0; on an older Core there are simply none.
+        try {
+            var screens = context.core().screens();
+            if (screens != null) {
+                new de.raindancer.modules.discordlink.service.LinkScreens(
+                        player -> store.linkOf(player), store::count, System::currentTimeMillis)
+                        .register(screens, context.plugin(), context.plugin().getServer());
+                context.closeWith(() -> de.raindancer.modules.discordlink.service.LinkScreens.KINDS
+                        .forEach(screens::unregister));
+            }
+        } catch (LinkageError olderCore) {
+            context.log().info("RainsCore is older than 2.10.0: no Discord screens until it is updated.");
+        }
 
         var timer = Scheduling.asyncTimer(context.plugin(), 2, TICK_SECONDS, task -> bot.tick());
         if (timer != null) {

@@ -75,4 +75,16 @@ class LinkStoreTest {
         assertThat(store.unlink(alex)).isFalse();
         assertThat(store.all()).extracting(Link::name).containsExactly("Sam");
     }
+
+    @Test
+    @DisplayName("how many players are linked, without loading them all")
+    void count() {
+        LinkStore store = store();
+        assertThat(store.count()).isZero();
+        store.link(new Link(alex, "Alex", "1", 1));
+        store.link(new Link(UUID.randomUUID(), "Sam", "1", 2));
+        assertThat(store.count()).isEqualTo(2);
+        store.unlink(alex);
+        assertThat(store.count()).isEqualTo(1);
+    }
 }

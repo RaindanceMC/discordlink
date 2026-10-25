@@ -134,6 +134,16 @@ public final class LinkStore {
         }).orElse(List.of());
     }
 
+    /** How many players are linked. */
+    public long count() {
+        return database.read(connection -> {
+            try (PreparedStatement select = connection.prepareStatement("SELECT COUNT(*) FROM discord_link");
+                 ResultSet row = select.executeQuery()) {
+                return row.next() ? row.getLong(1) : 0L;
+            }
+        }).orElse(0L);
+    }
+
     public List<Link> all() {
         return database.read(connection -> {
             try (PreparedStatement select = connection.prepareStatement(
