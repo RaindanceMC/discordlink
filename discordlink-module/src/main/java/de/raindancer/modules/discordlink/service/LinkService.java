@@ -20,7 +20,7 @@ import java.util.function.LongSupplier;
  */
 public final class LinkService implements IDiscordLinkService {
 
-    public enum Outcome { LINKED, LINKED_AND_WHITELISTED, ALREADY_YOURS, SOMEONE_ELSES, ONE_IS_ENOUGH, WRONG_CODE, TOO_MANY_TRIES, FAILED }
+    public enum Outcome { LINKED, LINKED_AND_WHITELISTED, WHITELISTED_AGAIN, ALREADY_YOURS, SOMEONE_ELSES, ONE_IS_ENOUGH, WRONG_CODE, TOO_MANY_TRIES, FAILED }
 
     public record Result(Outcome outcome, String player, List<Link> yours) {
     }
@@ -60,6 +60,11 @@ public final class LinkService implements IDiscordLinkService {
                 roles.current().mayWhitelistOthers(memberRoles));
         switch (verdict) {
             case ALREADY_YOURS -> {
+                // Linked before, then off the whitelist: the join code still proves the account is theirs.
+                if (code.purpose() == Purpose.JOIN && !whitelist.isWhitelisted(code.player())) {
+                    whitelist.add(code.player(), code.name());
+                    return new Result(Outcome.WHITELISTED_AGAIN, code.name(), theirs);
+                }
                 return new Result(Outcome.ALREADY_YOURS, code.name(), theirs);
             }
             case SOMEONE_ELSES -> {

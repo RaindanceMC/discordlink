@@ -38,6 +38,7 @@ discordlink:
     lookup-nothing: "Nothing found for **<name>**."
     linked: "Linked! **<player>** is now connected to your Discord account."
     linked-whitelisted: "You're in! **<player>** is whitelisted and linked to your Discord account. Join the server again."
+    whitelisted-again: "Welcome back! **<player>** is whitelisted again. Join the server again."
     already-yours: "**<player>** is already linked to you. All good."
     someone-elses: "**<player>** is already linked to a different Discord account. If that's wrong, ask the staff."
     one-is-enough: "You already have an account linked (**<linked>**). One per person. If you need another one, ask the staff."

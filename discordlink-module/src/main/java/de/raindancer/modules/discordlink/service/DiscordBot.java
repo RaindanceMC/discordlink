@@ -495,6 +495,9 @@ public final class DiscordBot implements IDiscordLinkService {
                 return text(result.outcome() == LinkService.Outcome.LINKED_AND_WHITELISTED
                         ? "discordlink.discord.linked-whitelisted" : "discordlink.discord.linked", "player", player);
             }
+            case WHITELISTED_AGAIN -> {
+                return text("discordlink.discord.whitelisted-again", "player", player);
+            }
             case ALREADY_YOURS -> {
                 return text("discordlink.discord.already-yours", "player", player);
             }

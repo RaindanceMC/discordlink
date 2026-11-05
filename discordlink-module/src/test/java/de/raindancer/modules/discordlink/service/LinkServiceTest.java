@@ -82,6 +82,32 @@ class LinkServiceTest {
     }
 
     @Test
+    @DisplayName("a linked player who fell off the whitelist gets back on with their own join code")
+    void joinCodeForYourOwnLinkedPlayer() {
+        UUID alex = UUID.randomUUID();
+        links.redeem(codes.issue(alex, "Alex", Purpose.JOIN).orElseThrow(), "111", List.of());
+        whitelisted.remove(alex);
+
+        LinkService.Result result = links.redeem(codes.issue(alex, "Alex", Purpose.JOIN).orElseThrow(), "111", List.of());
+
+        assertThat(result.outcome()).isEqualTo(LinkService.Outcome.WHITELISTED_AGAIN);
+        assertThat(whitelisted).containsEntry(alex, "Alex");
+        assertThat(links.linkOf(alex).orElseThrow().discord()).isEqualTo("111");
+    }
+
+    @Test
+    @DisplayName("a link code for your own, already linked player changes nothing")
+    void linkCodeForYourOwnLinkedPlayer() {
+        UUID alex = UUID.randomUUID();
+        links.redeem(codes.issue(alex, "Alex", Purpose.JOIN).orElseThrow(), "111", List.of());
+        whitelisted.remove(alex);
+
+        assertThat(links.redeem(links.codeToLink(alex, "Alex").orElseThrow(), "111", List.of()).outcome())
+                .isEqualTo(LinkService.Outcome.ALREADY_YOURS);
+        assertThat(whitelisted).doesNotContainKey(alex);
+    }
+
+    @Test
     @DisplayName("a link code from in game links without touching the whitelist")
     void linkCode() {
         UUID alex = UUID.randomUUID();
