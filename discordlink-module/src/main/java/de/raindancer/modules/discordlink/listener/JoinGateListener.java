@@ -2,6 +2,7 @@ package de.raindancer.modules.discordlink.listener;
 
 import de.raindancer.modules.discordlink.DiscordLinkServices;
 import de.raindancer.modules.discordlink.model.Purpose;
+import de.raindancer.core.ui.screen.LeaveScreen;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -41,9 +42,9 @@ public final class JoinGateListener implements IDiscordLinkListener {
         if (code.isEmpty()) {
             return;   // the database is down: vanilla's message is still true
         }
-        event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST,
+        event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST, LeaveScreen.framed(
                 services.messages().get("discordlink.join.kick", "code", code.get(),
-                        "minutes", String.valueOf(services.codes().lifetimeMinutes())));
+                        "minutes", String.valueOf(services.codes().lifetimeMinutes()))));
     }
 
     @Override
