@@ -37,6 +37,7 @@ class LinkServiceTest {
     private Database database;
     private final AtomicLong now = new AtomicLong(1_000_000);
     private final Map<UUID, String> whitelisted = new HashMap<>();
+    private final Map<UUID, String> addedBy = new HashMap<>();
     private CodeService codes;
     private LinkService links;
     private RoleConfigStore roles;
@@ -54,8 +55,9 @@ class LinkServiceTest {
             }
 
             @Override
-            public void add(UUID player, String name) {
+            public void add(UUID player, String name, String by) {
                 whitelisted.put(player, name);
+                addedBy.put(player, by);
             }
         };
         links = new LinkService(codes, store, roles, new LinkRule(), whitelist, now::get);
@@ -77,6 +79,7 @@ class LinkServiceTest {
 
         assertThat(result.outcome()).isEqualTo(LinkService.Outcome.LINKED_AND_WHITELISTED);
         assertThat(whitelisted).containsEntry(alex, "Alex");
+        assertThat(addedBy).as("recorded on the network's list").containsEntry(alex, "discord:111");
         assertThat(links.linkOf(alex)).isPresent();
         assertThat(links.redeem(code, "111", List.of()).outcome()).isEqualTo(LinkService.Outcome.WRONG_CODE);
     }

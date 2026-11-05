@@ -2,8 +2,10 @@
 
 Lilly's Discord and her Minecraft servers, joined.
 
-- **Join codes.** Somebody who is not whitelisted is turned away with a code. `/link <code>` in Lilly's Discord
-  whitelists them and links the account in one go, so the code proves the account is theirs.
+- **Join codes.** Somebody who is not whitelisted is turned away with a code — at the proxy by RainsNetworkProxy
+  (`whitelist=true`), else on a server's kick screen. `/link <code>` in Lilly's Discord whitelists them on the
+  network's list (RainsCore's, which the proxy checks) and links the account in one go, so the code proves the
+  account is theirs.
 - **One account per person**, unless they hold a role the Discord admins picked; those may also `/whitelist <friend>`.
 - **Discord roles → LuckPerms groups**, one way, on link, on every role change and every `sync-minutes`.
   Only mapped groups are ever touched.

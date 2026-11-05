@@ -62,7 +62,7 @@ public final class LinkService implements IDiscordLinkService {
             case ALREADY_YOURS -> {
                 // Linked before, then off the whitelist: the join code still proves the account is theirs.
                 if (code.purpose() == Purpose.JOIN && !whitelist.isWhitelisted(code.player())) {
-                    whitelist.add(code.player(), code.name());
+                    whitelist.add(code.player(), code.name(), "discord:" + discord);
                     return new Result(Outcome.WHITELISTED_AGAIN, code.name(), theirs);
                 }
                 return new Result(Outcome.ALREADY_YOURS, code.name(), theirs);
@@ -81,7 +81,7 @@ public final class LinkService implements IDiscordLinkService {
         }
         boolean newlyWhitelisted = code.purpose() == Purpose.JOIN && !whitelist.isWhitelisted(code.player());
         if (code.purpose() == Purpose.JOIN) {
-            whitelist.add(code.player(), code.name());
+            whitelist.add(code.player(), code.name(), "discord:" + discord);
         }
         return new Result(newlyWhitelisted ? Outcome.LINKED_AND_WHITELISTED : Outcome.LINKED, code.name(), store.linksOf(discord));
     }

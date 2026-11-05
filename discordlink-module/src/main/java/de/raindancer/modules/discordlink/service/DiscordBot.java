@@ -559,7 +559,7 @@ public final class DiscordBot implements IDiscordLinkService {
         if (whitelist.isWhitelisted(id)) {
             return text("discordlink.discord.whitelist-already", "player", exact);
         }
-        whitelist.add(id, exact);
+        whitelist.add(id, exact, "discord:" + member.getId());
         log.info("Discord link: {} whitelisted {} from Discord.", member.getUser().getName(), exact);
         announceIn(event.getGuild(), event.getGuild().getId().equals(settings.guildId().strip()) ? null
                 : event.getChannel().getId(), text("discordlink.discord.friend-welcome", "user", member.getAsMention(), "player", exact),

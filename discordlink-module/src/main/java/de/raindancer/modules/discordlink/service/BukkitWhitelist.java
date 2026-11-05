@@ -6,10 +6,7 @@ import org.bukkit.plugin.Plugin;
 
 import java.util.UUID;
 
-/**
- * Whitelists through vanilla. RainsCore's network whitelist hears the change and writes it to the network
- * document, so every server that takes part lets the player in — the module never touches that document itself.
- */
+/** Whitelists through vanilla: for a server whose Core keeps no network whitelist. */
 public final class BukkitWhitelist implements Whitelist {
 
     private final Plugin plugin;
@@ -26,7 +23,7 @@ public final class BukkitWhitelist implements Whitelist {
     }
 
     @Override
-    public void add(UUID player, String name) {
+    public void add(UUID player, String name, String by) {
         Scheduling.global(plugin, () -> server.getOfflinePlayer(player).setWhitelisted(true));
     }
 }

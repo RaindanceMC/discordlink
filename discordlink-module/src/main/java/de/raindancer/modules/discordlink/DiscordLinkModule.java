@@ -12,6 +12,8 @@ import de.raindancer.modules.discordlink.rules.CodeRule;
 import de.raindancer.modules.discordlink.rules.LinkRule;
 import de.raindancer.modules.discordlink.rules.RoleSyncRule;
 import de.raindancer.modules.discordlink.service.BukkitWhitelist;
+import de.raindancer.modules.discordlink.service.CoreWhitelist;
+import de.raindancer.modules.discordlink.service.Whitelist;
 import de.raindancer.modules.discordlink.service.CodeService;
 import de.raindancer.modules.discordlink.service.CorePlayerFacts;
 import de.raindancer.modules.discordlink.service.InfoService;
@@ -31,7 +33,7 @@ import java.util.List;
  */
 public final class DiscordLinkModule implements FlexModule {
 
-    private static final ModuleInfo INFO = ModuleInfo.of("discordlink", "Discord Link", "0.7.1")
+    private static final ModuleInfo INFO = ModuleInfo.of("discordlink", "Discord Link", "0.8.0")
             .describedAs("Whitelisting and account links through Discord's /link; Discord roles give LuckPerms groups")
             .by("Raindancer118");
 
@@ -59,7 +61,14 @@ public final class DiscordLinkModule implements FlexModule {
 
         CodeService codes = new CodeService(store, new CodeRule(), new SecureRandom(), System::currentTimeMillis,
                 settings.current());
-        BukkitWhitelist whitelist = new BukkitWhitelist(context.plugin(), context.plugin().getServer());
+        Whitelist whitelist = new BukkitWhitelist(context.plugin(), context.plugin().getServer());
+        // The network's list — Core 2.38.0; on an older Core vanilla's, as before.
+        try {
+            context.core().whitelist();
+            whitelist = new CoreWhitelist(() -> context.core().whitelist(), whitelist);
+        } catch (LinkageError olderCore) {
+            context.log().info("RainsCore is older than 2.38.0: /link whitelists on this server's own list.");
+        }
         LinkService links = new LinkService(codes, store, roles, new LinkRule(), whitelist, System::currentTimeMillis);
         RoleSyncService sync = new RoleSyncService(() -> context.core().groups(), roles, store, new RoleSyncRule(), context.log());
         bot = new DiscordBot(context.plugin(), context.plugin().getServer(), context.core().messages(), context.log(),

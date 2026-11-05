@@ -1,12 +1,12 @@
 package de.raindancer.modules.discordlink.rules;
 
-import java.util.Locale;
+import de.raindancer.core.moderation.whitelist.JoinCode;
+
 import java.util.Optional;
 import java.util.random.RandomGenerator;
 
 /**
- * What a code looks like. Read off a kick screen and typed into Discord, so no 0/O and 1/I/L, and long enough
- * that guessing is pointless: 31^10 ≈ 8·10^14, against five wrong tries per Discord account per ten minutes.
+ * What a code looks like — RainsCore's {@link JoinCode}, which RainsNetworkProxy's codes match too.
  */
 public final class CodeRule implements IDiscordLinkRule {
 
@@ -16,29 +16,15 @@ public final class CodeRule implements IDiscordLinkRule {
     }
 
 
-    static final String ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-    static final int LENGTH = 10;
+    static final String ALPHABET = JoinCode.ALPHABET;
+    static final int LENGTH = JoinCode.LENGTH;
 
     public String newCode(RandomGenerator random) {
-        StringBuilder code = new StringBuilder(LENGTH + 1);
-        for (int i = 0; i < LENGTH; i++) {
-            if (i == LENGTH / 2) {
-                code.append('-');
-            }
-            code.append(ALPHABET.charAt(random.nextInt(ALPHABET.length())));
-        }
-        return code.toString();
+        return JoinCode.newCode(random);
     }
 
     /** "abcde 12345", "ABCDE-12345 " → "ABCDE-12345"; anything that can't be a code → empty. Pure. */
     public Optional<String> normalise(String typed) {
-        if (typed == null) {
-            return Optional.empty();
-        }
-        String letters = typed.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]", "");
-        if (letters.length() != LENGTH || !letters.chars().allMatch(c -> ALPHABET.indexOf(c) >= 0)) {
-            return Optional.empty();
-        }
-        return Optional.of(letters.substring(0, LENGTH / 2) + "-" + letters.substring(LENGTH / 2));
+        return JoinCode.normalise(typed);
     }
 }

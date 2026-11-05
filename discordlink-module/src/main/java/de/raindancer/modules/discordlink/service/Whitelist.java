@@ -3,12 +3,13 @@ package de.raindancer.modules.discordlink.service;
 import java.util.UUID;
 
 /**
- * The server's whitelist, as this module sees it. The Bukkit side whitelists through vanilla, which RainsCore's
- * network whitelist then carries to every server that takes part.
+ * The whitelist, as this module sees it: the network's ({@link CoreWhitelist}) — RainsCore's list that
+ * RainsNetworkProxy checks at the door — or vanilla's on a server without it.
  */
 public interface Whitelist {
 
     boolean isWhitelisted(UUID player);
 
-    void add(UUID player, String name);
+    /** @param by who did it, for the record: {@code discord:<id>} */
+    void add(UUID player, String name, String by);
 }
