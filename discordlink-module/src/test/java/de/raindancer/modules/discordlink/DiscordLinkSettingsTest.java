@@ -17,7 +17,16 @@ class DiscordLinkSettingsTest {
     private static DiscordLinkSettings with(String guild, String more) {
         DiscordLinkSettings d = DiscordLinkSettings.DEFAULTS;
         return new DiscordLinkSettings(d.enabled(), guild, d.joinCodes(), d.codeMinutes(), d.syncMinutes(), more,
-                STAFF, d.lookupUrl());
+                STAFF, d.lookupUrl(), d.hushUrl(), d.hushServerName(), d.hushAnticheat(), d.hushPunishments(),
+                d.hushReports(), d.hushServer());
+    }
+
+    @Test
+    void hushFeedDefaults() {
+        DiscordLinkSettings d = DiscordLinkSettings.DEFAULTS;
+        assertEquals("https://hush.raindancer118.de/api/minecraft/events", d.hushUrl());
+        assertEquals("", d.hushServerName());
+        assertTrue(d.hushAnticheat() && d.hushPunishments() && d.hushReports() && d.hushServer());
     }
 
     @Test

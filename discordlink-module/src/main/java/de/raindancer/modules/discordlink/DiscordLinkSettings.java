@@ -58,10 +58,41 @@ public record DiscordLinkSettings(
         @In("discordlink") @Title("Website /lookup asks")
         @Describe("The applications website; its key is a secret set from the console (/discordlink lookupkey).")
         @Key("lookup-url")
-        String lookupUrl) {
+        String lookupUrl,
+
+        @In("discordlink") @Title("Hush feed: address")
+        @Describe("Where this server posts its Minecraft feed (anti-cheat alerts, punishments, reports, start and stop) "
+                + "for the Discord bot Hush. The token is a secret set from the console (/discordlink hushtoken).")
+        @Key("hush.url")
+        String hushUrl,
+
+        @In("discordlink") @Title("Hush feed: this server's name")
+        @Describe("Shown in the embeds, 32 characters at most. Empty: the server's id on the network.")
+        @Key("hush.server-name")
+        String hushServerName,
+
+        @In("discordlink") @Title("Hush feed: anti-cheat alerts")
+        @Key("hush.anticheat")
+        boolean hushAnticheat,
+
+        @In("discordlink") @Title("Hush feed: punishments")
+        @Describe("Bans, mutes, kicks and warnings given here, and bans and mutes lifted.")
+        @Key("hush.punishments")
+        boolean hushPunishments,
+
+        @In("discordlink") @Title("Hush feed: reports")
+        @Describe("Reports players file with /report.")
+        @Key("hush.reports")
+        boolean hushReports,
+
+        @In("discordlink") @Title("Hush feed: server start and stop")
+        @Key("hush.server")
+        boolean hushServer) {
+
+    public static final String HUSH_URL = "https://hush.raindancer118.de/api/minecraft/events";
 
     public static final DiscordLinkSettings DEFAULTS = new DiscordLinkSettings(true, "", true, 30, 30, "", "",
-            "https://applications.lillyyxoxo.net");
+            "https://applications.lillyyxoxo.net", HUSH_URL, "", true, true, true, true);
 
     public boolean hasLookupGuild() {
         return lookupGuildId != null && lookupGuildId.strip().matches("\\d{15,25}");

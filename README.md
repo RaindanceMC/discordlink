@@ -27,5 +27,17 @@ Discord: `/link`, `/unlink`, `/accounts`, `/whitelist`, `/mcadmin …` (Manage S
 A test server started from a copy of the live data must run with `RAINS_DISCORDLINK_BOT=off`: the copy holds the
 real token, and a second bot on it would answer every command twice.
 
+## Hush feed (Minecraft → Discord)
+Every server posts what happens on it to the Discord bot Hush (`docs/MINECRAFT.md` of the bot): anti-cheat alerts,
+punishments (ban, tempban, mute, tempmute, kick, warn, unban, unmute), in-game `/report`s, server start/stop/crash.
+Batched every ~2 s or 50 events, sent off-thread; 429/5xx are retried with backoff (Retry-After honoured) and dropped
+after 5 minutes, 400/401/404 are not retried; one log line per outage.
+- Settings (`/settings` → Discord link): `hush.url`, `hush.server-name` (empty = network id), `hush.anticheat`,
+  `hush.punishments`, `hush.reports`, `hush.server`.
+- Token, console only: `discordlink hushtoken <token>` / `hushtoken clear` (also `hush token <token>`).
+  `discordlink hush status`: address, name, last success/failure, queue — never the token.
+- Sources: RainsCore 2.71.0 `ModerationFeed` (fed by `Punishments`, and by Moderation 3.20.0 for anti-cheat alerts and
+  reports); start/stop from `ServerLoadEvent` and the module's disable; a crash is a `hush-running` marker left behind.
+
 ## Build
 `mvn install` — module tests (SQLite, and Postgres in CI), then the shaded plugin and its jar test.

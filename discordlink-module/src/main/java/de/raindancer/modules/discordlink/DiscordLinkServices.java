@@ -12,5 +12,6 @@ import java.util.function.Supplier;
 
 /** The module's collaborators, handed to its listeners and commands. */
 public record DiscordLinkServices(Plugin plugin, Server server, Messages messages, Supplier<DiscordLinkSettings> settings,
-                                  Secrets secrets, CodeService codes, LinkService links, DiscordBot bot) {
+                                  Secrets secrets, CodeService codes, LinkService links, DiscordBot bot,
+                                  de.raindancer.modules.discordlink.hush.HushControl hush) {
 }

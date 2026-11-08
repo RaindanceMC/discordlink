@@ -10,7 +10,7 @@ import org.bukkit.command.ConsoleCommandSender;
 import java.util.function.Supplier;
 
 /**
- * {@code /discordlink status|restart|token <token>|token clear|lookupkey <key>|lookupkey clear}. The token only from the console: typed in chat it
+ * {@code /discordlink status|restart|token <token>|token clear|lookupkey <key>|lookupkey clear|hushtoken <token>|hushtoken clear|hush status}. The token only from the console: typed in chat it
  * lands in the chat log and on everybody's screen who watches a stream.
  */
 public final class DiscordLinkAdminCommand implements IDiscordLinkCommand {
@@ -75,7 +75,37 @@ public final class DiscordLinkAdminCommand implements IDiscordLinkCommand {
                             : "discordlink.admin.token-failed");
                 });
             }
+            case "hushtoken" -> hushToken(live, sender, args, 1);
+            case "hush" -> {
+                String sub = args.length < 2 ? "status" : args[1].toLowerCase(java.util.Locale.ROOT);
+                switch (sub) {
+                    case "status" -> Scheduling.async(live.plugin(), () -> {
+                        live.messages().send(sender, "discordlink.admin.hush-status");
+                        live.hush().statusLines().forEach(line -> live.messages().send(sender, "discordlink.admin.hush-line", "line", line));
+                    });
+                    case "token" -> hushToken(live, sender, args, 2);
+                    default -> live.messages().send(sender, "discordlink.admin.usage");
+                }
+            }
             default -> live.messages().send(sender, "discordlink.admin.usage");
         }
+    }
+
+    /** The feed's token, console only and never repeated back: {@code args[at]} is the token or {@code clear}. */
+    private static void hushToken(DiscordLinkServices live, CommandSender sender, String[] args, int at) {
+        if (!(sender instanceof ConsoleCommandSender)) {
+            live.messages().send(sender, "discordlink.admin.console-only");
+            return;
+        }
+        if (args.length <= at) {
+            live.messages().send(sender, "discordlink.admin.usage");
+            return;
+        }
+        boolean clear = args[at].equalsIgnoreCase("clear");
+        Scheduling.async(live.plugin(), () -> {
+            boolean done = clear ? live.hush().clearToken() : live.hush().setToken(args[at]);
+            live.messages().send(sender, done ? (clear ? "discordlink.admin.hushtoken-cleared" : "discordlink.admin.hushtoken-set")
+                    : "discordlink.admin.token-failed");
+        });
     }
 }

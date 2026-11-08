@@ -30,6 +30,10 @@ sections:
     title: Codes
     text: |
       Join codes on the kick screen: {setting:discordlink:join-codes|onoff}. A code lasts {setting:discordlink:code-minutes|minutes}. Codes only appear while a bot answers somewhere in the network (a code nobody can redeem is worse than the plain message), and never for operators.
+  - question: How does the Hush feed work?
+    title: Hush feed
+    text: |
+      This server posts anti-cheat alerts, punishments, reports and its own start and stop to the Discord bot Hush, which puts them in the log channels. Connect it with <white>/minecraft connect</white> in Discord, then put the token in from the <i>console</i>: {cmd:/discordlink hushtoken TOKEN} ({cmd:/discordlink hushtoken clear} stops it). Address, server name and what is sent are in {run:/settings} (<white>discordlink</white>). {run:/discordlink hush status} shows the address, last success and failure and what is queued — never the token. A Hush that is down costs the server nothing: events wait, are retried for five minutes and then dropped, with one line in the log per outage.
   - question: How do roles become groups?
     title: Roles to groups
     text: |

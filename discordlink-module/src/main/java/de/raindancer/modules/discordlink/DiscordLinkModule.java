@@ -23,6 +23,14 @@ import de.raindancer.modules.discordlink.service.RoleSyncService;
 import de.raindancer.modules.discordlink.store.LinkStore;
 import de.raindancer.modules.discordlink.store.RoleConfigStore;
 
+import de.raindancer.modules.discordlink.hush.HttpHushTransport;
+import de.raindancer.modules.discordlink.hush.HushControl;
+import de.raindancer.modules.discordlink.hush.HushFeed;
+import de.raindancer.modules.discordlink.hush.HushHooks;
+import de.raindancer.modules.discordlink.hush.HushServerListener;
+import de.raindancer.modules.discordlink.hush.RunMarker;
+import de.raindancer.modules.discordlink.rules.HushRetryRule;
+
 import java.security.SecureRandom;
 import java.util.List;
 
@@ -33,7 +41,7 @@ import java.util.List;
  */
 public final class DiscordLinkModule implements FlexModule {
 
-    private static final ModuleInfo INFO = ModuleInfo.of("discordlink", "Discord Link", "0.9.0")
+    private static final ModuleInfo INFO = ModuleInfo.of("discordlink", "Discord Link", "0.10.0")
             .describedAs("Whitelisting and account links through Discord's /link; Discord roles give LuckPerms groups")
             .by("Raindancer118");
 
@@ -41,6 +49,10 @@ public final class DiscordLinkModule implements FlexModule {
     private static final long TICK_SECONDS = 5;
 
     private DiscordBot bot;
+    private HushFeed hushFeed;
+    private HushHooks hushHooks;
+    private HushServerListener hushServer;
+    private RunMarker runMarker;
 
     @Override
     public ModuleInfo info() {
@@ -79,8 +91,9 @@ public final class DiscordLinkModule implements FlexModule {
         settings.onChange(sync::settings);
         settings.onChange(bot::settings);
 
+        HushControl hush = startHush(context, settings::current);
         DiscordLinkServices services = new DiscordLinkServices(context.plugin(), context.plugin().getServer(),
-                context.core().messages(), settings::current, context.core().secrets(), codes, links, bot);
+                context.core().messages(), settings::current, context.core().secrets(), codes, links, bot, hush);
         context.listener(new JoinGateListener(services));
         DiscordLinkCommands.ready(services);
         // Screens for /screen — Core 2.10.0; on an older Core there are simply none.
@@ -104,8 +117,47 @@ public final class DiscordLinkModule implements FlexModule {
         context.log().info("Discord link is up; the bot runs on whichever server holds '{}'.", DiscordBot.ROLE);
     }
 
+    /** Hush's Minecraft feed: Core's moderation events and this server's start and stop, sent off-thread in batches. */
+    private HushControl startHush(ModuleContext context, java.util.function.Supplier<DiscordLinkSettings> settings) {
+        HushControl hush = new HushControl(context.core().secrets(), settings, () -> context.core().network().serverId(),
+                System::currentTimeMillis);
+        hushFeed = new HushFeed(new HttpHushTransport(), hush::config, System::currentTimeMillis,
+                text -> context.log().warn("{}", text), text -> context.log().info("{}", text), new HushRetryRule(), 2_000);
+        hush.feed(hushFeed);
+        hushFeed.start();
+        runMarker = new RunMarker(context.dataFolder().resolve("hush-running"));
+        hushServer = new HushServerListener(hushFeed::offer, System::currentTimeMillis, runMarker.begin());
+        context.listener(hushServer);
+        if (context.plugin().getServer().getCurrentTick() > 0) {
+            hushServer.started();
+        }
+        // Core 2.71.0; on an older Core there is no punishment, anti-cheat or report side, only start and stop.
+        try {
+            hushHooks = HushHooks.connect(context.core().moderationFeed(), hushFeed::offer, System::currentTimeMillis,
+                    id -> {
+                        String name = org.bukkit.Bukkit.getOfflinePlayer(id).getName();
+                        return name == null ? id.toString() : name;
+                    });
+        } catch (LinkageError olderCore) {
+            context.log().info("RainsCore is older than 2.71.0: the Hush feed carries only server start and stop.");
+        }
+        return hush;
+    }
+
     @Override
     public void disable() {
+        if (hushHooks != null) {
+            hushHooks.close();
+        }
+        if (hushFeed != null) {
+            if (hushServer != null && org.bukkit.Bukkit.isStopping()) {
+                hushServer.stopping();
+            }
+            hushFeed.stop(3_000);
+        }
+        if (runMarker != null) {
+            runMarker.clean();
+        }
         DiscordLinkCommands.stopped();
         if (bot != null) {
             bot.stop();

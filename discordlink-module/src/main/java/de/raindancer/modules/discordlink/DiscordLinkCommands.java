@@ -27,7 +27,8 @@ public final class DiscordLinkCommands {
                 ModuleCommand.of("discordlink", "The Discord link bot: status, restart, token",
                                 new DiscordLinkAdminCommand(DiscordLinkCommands::require))
                         .needing(ADMIN_NODE)
-                        .taking("status", "restart", "token <token> | token clear — console only"));
+                        .taking("status", "restart", "token <token> | token clear — console only",
+                                "hushtoken <token> | hushtoken clear — console only", "hush status"));
     }
 
     static void ready(DiscordLinkServices live) {
