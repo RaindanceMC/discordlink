@@ -20,7 +20,15 @@ discordlink:
   linked-in-game: "<green>Linked! This player now belongs to Discord account <white><account></white>."
 
   admin:
-    usage: "<gray>/discordlink status  ·  restart  ·  token <token>|clear  ·  lookupkey <key>|clear  ·  hushtoken <token>|clear <dark_gray>(these console only)<gray>  ·  hush status"
+    usage: "<gray>/discordlink status  ·  restart  ·  link <name|uuid> <discord id>  ·  unlink <name|uuid>  ·  token <token>|clear  ·  lookupkey <key>|clear  ·  hushtoken <token>|clear <dark_gray>(these console only)<gray>  ·  hush status"
+    link-discord: "<red>The Discord account is its numeric id (Discord: right click the member, Copy User ID)."
+    link-unknown: "<red>There is no Minecraft account called <white><player></white>."
+    link-done: "<green><white><player></white> is linked to Discord account <white><discord></white>."
+    link-already: "<gray><white><player></white> is already linked to that Discord account."
+    link-taken: "<red><white><player></white> is already linked to another Discord account. <white>/discordlink unlink <player></white> first."
+    link-failed: "<red>Couldn't link <white><player></white>, the database didn't answer."
+    unlink-done: "<green><white><player></white> is unlinked."
+    unlink-none: "<gray><white><player></white> isn't linked."
     status: "<gray>Discord link bot: <white><status>"
     restarting: "<gray>Restarting the Discord bot…"
     console-only: "<red>The bot token only goes in from the server console, never in chat."

@@ -76,6 +76,7 @@ public final class DiscordLinkAdminCommand implements IDiscordLinkCommand {
                 });
             }
             case "hushtoken" -> hushToken(live, sender, args, 1);
+            case "link", "unlink" -> byHand(live, sender, what.equals("link"), args);
             case "hush" -> {
                 String sub = args.length < 2 ? "status" : args[1].toLowerCase(java.util.Locale.ROOT);
                 switch (sub) {
@@ -89,6 +90,48 @@ public final class DiscordLinkAdminCommand implements IDiscordLinkCommand {
             }
             default -> live.messages().send(sender, "discordlink.admin.usage");
         }
+    }
+
+    /** {@code link <name|uuid> <discord id>} / {@code unlink <name|uuid>}: staff link an account without a code. */
+    private static void byHand(DiscordLinkServices live, CommandSender sender, boolean link, String[] args) {
+        if (args.length < (link ? 3 : 2)) {
+            live.messages().send(sender, "discordlink.admin.usage");
+            return;
+        }
+        String discord = link ? args[2].replaceAll("[<@!>]", "") : "";
+        if (link && !discord.matches("\\d{15,25}")) {
+            live.messages().send(sender, "discordlink.admin.link-discord");
+            return;
+        }
+        String staff = sender instanceof ConsoleCommandSender ? "Console" : sender.getName();
+        Scheduling.async(live.plugin(), () -> {
+            var found = live.resolver().resolve(args[1]);
+            if (found.isEmpty()) {
+                live.messages().send(sender, "discordlink.admin.link-unknown", "player", args[1]);
+                return;
+            }
+            var who = found.get();
+            live.notes().note(who.id(), staff);
+            if (!link) {
+                boolean done = live.links().unlink(who.id());
+                if (!done) {
+                    live.notes().take(who.id());
+                }
+                live.messages().send(sender, done ? "discordlink.admin.unlink-done" : "discordlink.admin.unlink-none", "player", who.name());
+                return;
+            }
+            var result = live.links().adopt(who.id(), who.name(), discord);
+            if (result.outcome() != de.raindancer.modules.discordlink.service.LinkService.Outcome.LINKED) {
+                live.notes().take(who.id());
+            }
+            String key = switch (result.outcome()) {
+                case LINKED -> "discordlink.admin.link-done";
+                case ALREADY_YOURS -> "discordlink.admin.link-already";
+                case SOMEONE_ELSES -> "discordlink.admin.link-taken";
+                default -> "discordlink.admin.link-failed";
+            };
+            live.messages().send(sender, key, "player", who.name(), "discord", discord);
+        });
     }
 
     /** The feed's token, console only and never repeated back: {@code args[at]} is the token or {@code clear}. */

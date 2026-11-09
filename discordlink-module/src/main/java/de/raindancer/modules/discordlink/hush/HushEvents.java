@@ -104,8 +104,17 @@ public final class HushEvents {
 
     /** A Minecraft account was linked to a Discord account, or the link ended. */
     public static DataObject link(long at, String action, UUID player, String name, String discord) {
-        return DataObject.empty().put("type", "link").put("at", at).put("action", action)
+        return link(at, action, player, name, discord, null);
+    }
+
+    /** @param by the staff member who linked or unlinked it by hand; null for a player's own /link */
+    public static DataObject link(long at, String action, UUID player, String name, String discord, String by) {
+        DataObject event = DataObject.empty().put("type", "link").put("at", at).put("action", action)
                 .put("player", who(name, player)).put("discord", discord);
+        if (by != null && !by.isBlank()) {
+            event.put("by", cut(by, 64));
+        }
+        return event;
     }
 
     /** Every link there is, for Hush to compare with what it knows. */

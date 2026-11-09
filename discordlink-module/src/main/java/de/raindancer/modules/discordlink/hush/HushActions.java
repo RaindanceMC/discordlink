@@ -7,6 +7,7 @@ import de.raindancer.modules.discordlink.model.RoleConfig;
 import de.raindancer.modules.discordlink.rules.RoleSyncRule;
 import de.raindancer.modules.discordlink.service.InfoService;
 import de.raindancer.modules.discordlink.service.LinkService;
+import de.raindancer.modules.discordlink.service.PlayerResolver;
 import net.dv8tion.jda.api.utils.data.DataArray;
 import net.dv8tion.jda.api.utils.data.DataObject;
 
@@ -45,13 +46,15 @@ public final class HushActions {
     private final LongSupplier clock;
     private final Executor async;
     private final HushGroupWatcher watcher;
+    private final PlayerResolver resolver;
+    private final LinkNotes notes;
 
     private final Map<String, DataObject> answered = new LinkedHashMap<>();
 
     /** @param answer {@link HushFeed#offerNow}: somebody is waiting for these */
     public HushActions(LinkService links, InfoService info, Supplier<PermissionGroups> groups, RoleSyncRule rule,
                        BiConsumer<String, Supplier<DataObject>> answer, LongSupplier clock, Executor async,
-                       HushGroupWatcher watcher) {
+                       HushGroupWatcher watcher, PlayerResolver resolver, LinkNotes notes) {
         this.links = links;
         this.info = info;
         this.groups = groups;
@@ -60,6 +63,8 @@ public final class HushActions {
         this.clock = clock;
         this.async = async;
         this.watcher = watcher;
+        this.resolver = resolver;
+        this.notes = notes;
     }
 
     /** Takes one action off the feed's thread at once; the work and its answer follow. */
@@ -99,7 +104,8 @@ public final class HushActions {
     private DataObject run(String id, String type, DataObject action) {
         return switch (type) {
             case "redeem" -> redeem(id, action.getString("code", ""), action.getString("discord", ""));
-            case "unlink" -> unlink(id, action.getString("discord", ""));
+            case "unlink" -> unlink(id, action.getString("discord", ""), action.getString("player", ""), action.getString("by", ""));
+            case "link" -> link(id, action.getString("discord", ""), action.getString("player", ""), action.getString("by", ""));
             case "set_groups" -> setGroups(id, action);
             case "sync_links" -> syncLinks(id);
             case "player" -> player(id, action.getString("name", ""));
@@ -130,12 +136,48 @@ public final class HushActions {
         return HushEvents.result(clock.getAsLong(), id, ok, outcome, data);
     }
 
-    private DataObject unlink(String id, String discord) {
-        List<Link> mine = links.linksOf(discord);
+    /** Staff link by name or UUID: no code, the player may never have joined. */
+    private DataObject link(String id, String discord, String typed, String by) {
+        if (discord.isBlank()) {
+            return HushEvents.result(clock.getAsLong(), id, false, "failed", null);
+        }
+        Optional<PlayerResolver.Resolved> found = resolver.resolve(typed);
+        if (found.isEmpty()) {
+            return HushEvents.result(clock.getAsLong(), id, false, "unknown_player", null);
+        }
+        PlayerResolver.Resolved who = found.get();
+        if (!by.isBlank()) {
+            notes.note(who.id(), by);
+        }
+        LinkService.Result result = links.adopt(who.id(), who.name(), discord);
+        boolean ok = result.outcome() == LinkService.Outcome.LINKED || result.outcome() == LinkService.Outcome.ALREADY_YOURS;
+        if (result.outcome() != LinkService.Outcome.LINKED) {
+            notes.take(who.id());
+        }
+        return HushEvents.result(clock.getAsLong(), id, ok, result.outcome() == LinkService.Outcome.LINKED ? "linked"
+                : result.outcome().name().toLowerCase(java.util.Locale.ROOT),
+                DataObject.empty().put("player", DataObject.empty().put("name", who.name()).put("uuid", who.id().toString())));
+    }
+
+    private DataObject unlink(String id, String discord, String typed, String by) {
+        List<Link> mine = new ArrayList<>();
+        if (!typed.isBlank()) {
+            resolver.resolve(typed).flatMap(who -> links.linkOf(who.id())).ifPresent(mine::add);
+        } else {
+            mine.addAll(links.linksOf(discord));
+        }
         DataArray names = DataArray.empty();
         for (Link link : mine) {
+            if (!by.isBlank()) {
+                notes.note(link.player(), by);
+            }
             if (links.unlink(link.player())) {
                 names.add(link.name());
+            }
+        }
+        for (Link link : mine) {
+            if (names.length() == 0) {
+                notes.take(link.player());
             }
         }
         return HushEvents.result(clock.getAsLong(), id, names.length() > 0, names.length() > 0 ? "unlinked" : "not_linked",

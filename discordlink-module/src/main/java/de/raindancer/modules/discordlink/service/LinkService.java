@@ -98,6 +98,24 @@ public final class LinkService implements IDiscordLinkService {
         return new Result(newlyWhitelisted ? Outcome.LINKED_AND_WHITELISTED : Outcome.LINKED, code.name(), store.linksOf(discord));
     }
 
+    /**
+     * Staff link an account to a Discord account by hand: no code, the player may never have joined. An account
+     * that already belongs to somebody else is not taken over; a Discord account may hold several.
+     */
+    public Result adopt(UUID player, String name, String discord) {
+        Optional<Link> existing = store.linkOf(player);
+        if (existing.isPresent()) {
+            return new Result(existing.get().discord().equals(discord) ? Outcome.ALREADY_YOURS : Outcome.SOMEONE_ELSES,
+                    existing.get().name(), store.linksOf(discord));
+        }
+        Link made = new Link(player, name, discord, clock.getAsLong());
+        if (!store.link(made)) {
+            return new Result(Outcome.FAILED, name, store.linksOf(discord));
+        }
+        changed(made, true);
+        return new Result(Outcome.LINKED, name, store.linksOf(discord));
+    }
+
     public List<Link> linksOf(String discord) {
         return store.linksOf(discord);
     }

@@ -25,6 +25,9 @@ import de.raindancer.modules.discordlink.store.RoleConfigStore;
 
 import de.raindancer.modules.discordlink.hush.HttpHushTransport;
 import de.raindancer.modules.discordlink.hush.HushActions;
+import de.raindancer.modules.discordlink.hush.LinkNotes;
+import de.raindancer.modules.discordlink.service.MojangHttp;
+import de.raindancer.modules.discordlink.service.PlayerResolver;
 import de.raindancer.modules.discordlink.hush.HushControl;
 import de.raindancer.modules.discordlink.hush.HushEvents;
 import de.raindancer.modules.discordlink.hush.HushGroupWatcher;
@@ -44,7 +47,7 @@ import java.util.List;
  */
 public final class DiscordLinkModule implements FlexModule {
 
-    private static final ModuleInfo INFO = ModuleInfo.of("discordlink", "Discord Link", "0.11.1")
+    private static final ModuleInfo INFO = ModuleInfo.of("discordlink", "Discord Link", "0.12.0")
             .describedAs("Whitelisting and account links through Discord's /link; Discord roles give LuckPerms groups")
             .by("Raindancer118");
 
@@ -95,9 +98,30 @@ public final class DiscordLinkModule implements FlexModule {
         settings.onChange(sync::settings);
         settings.onChange(bot::settings);
 
-        HushControl hush = startHush(context, settings::current, links, new InfoService(new CorePlayerFacts(context.core(), store)));
-        DiscordLinkServices services = new DiscordLinkServices(context.plugin(), context.plugin().getServer(),
-                context.core().messages(), settings::current, context.core().secrets(), codes, links, bot, hush);
+        var server = context.plugin().getServer();
+        PlayerResolver resolver = new PlayerResolver(new PlayerResolver.Known() {
+            @Override
+            public java.util.Optional<PlayerResolver.Resolved> byName(String name) {
+                for (var online : server.getOnlinePlayers()) {
+                    if (online.getName().equalsIgnoreCase(name)) {
+                        return java.util.Optional.of(new PlayerResolver.Resolved(online.getUniqueId(), online.getName()));
+                    }
+                }
+                var cached = server.getOfflinePlayerIfCached(name);
+                return cached == null || cached.getName() == null ? java.util.Optional.empty()
+                        : java.util.Optional.of(new PlayerResolver.Resolved(cached.getUniqueId(), cached.getName()));
+            }
+
+            @Override
+            public java.util.Optional<String> nameOf(java.util.UUID id) {
+                return java.util.Optional.ofNullable(server.getOfflinePlayer(id).getName());
+            }
+        }, new MojangHttp());
+        LinkNotes notes = new LinkNotes();
+        HushControl hush = startHush(context, settings::current, links, new InfoService(new CorePlayerFacts(context.core(), store)),
+                resolver, notes);
+        DiscordLinkServices services = new DiscordLinkServices(context.plugin(), server,
+                context.core().messages(), settings::current, context.core().secrets(), codes, links, bot, hush, resolver, notes);
         context.listener(new JoinGateListener(services));
         DiscordLinkCommands.ready(services);
         // Screens for /screen — Core 2.10.0; on an older Core there are simply none.
@@ -123,14 +147,14 @@ public final class DiscordLinkModule implements FlexModule {
 
     /** Hush's Minecraft feed: Core's moderation events and this server's start and stop, sent off-thread in batches. */
     private HushControl startHush(ModuleContext context, java.util.function.Supplier<DiscordLinkSettings> settings,
-                                  LinkService links, InfoService info) {
+                                  LinkService links, InfoService info, PlayerResolver resolver, LinkNotes notes) {
         HushControl hush = new HushControl(context.core().secrets(), settings, () -> context.core().network().serverId(),
                 System::currentTimeMillis);
         hushFeed = new HushFeed(new HttpHushTransport(), hush::config, System::currentTimeMillis,
                 text -> context.log().warn("{}", text), text -> context.log().info("{}", text), new HushRetryRule(), 2_000);
         hush.feed(hushFeed);
         hushFeed.access(() -> context.plugin().getServer().hasWhitelist() ? "whitelist" : "open");
-        startHushActions(context, links, info);
+        startHushActions(context, links, info, resolver, notes);
         hushFeed.start();
         runMarker = new RunMarker(context.dataFolder().resolve("hush-running"));
         hushServer = new HushServerListener(hushFeed::offer, System::currentTimeMillis, runMarker.begin());
@@ -152,15 +176,17 @@ public final class DiscordLinkModule implements FlexModule {
     }
 
     /** Protocol v2: what Discord asks of this server, and the link and group changes Discord's roles follow. */
-    private void startHushActions(ModuleContext context, LinkService links, InfoService info) {
+    private void startHushActions(ModuleContext context, LinkService links, InfoService info, PlayerResolver resolver,
+                                  LinkNotes notes) {
         try {
             hushGroups = new HushGroupWatcher(links, () -> context.core().groups(), hushFeed::offer, System::currentTimeMillis);
             HushActions actions = new HushActions(links, info, () -> context.core().groups(), new RoleSyncRule(),
-                    hushFeed::offerNow, System::currentTimeMillis, work -> Scheduling.async(context.plugin(), work), hushGroups);
+                    hushFeed::offerNow, System::currentTimeMillis, work -> Scheduling.async(context.plugin(), work), hushGroups, resolver, notes);
             hushFeed.actions(actions::handle);
             links.onChange((link, linked) -> {
                 long at = System.currentTimeMillis();
-                hushFeed.offerNow("link", () -> HushEvents.link(at, linked ? "linked" : "unlinked", link.player(), link.name(), link.discord()));
+                String by = notes.take(link.player()).orElse(null);
+                hushFeed.offerNow("link", () -> HushEvents.link(at, linked ? "linked" : "unlinked", link.player(), link.name(), link.discord(), by));
             });
             hushGroups.start();
         } catch (LinkageError olderCore) {

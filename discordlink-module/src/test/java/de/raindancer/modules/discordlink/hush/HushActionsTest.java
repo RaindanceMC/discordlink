@@ -13,6 +13,7 @@ import de.raindancer.modules.discordlink.service.FakeGroups;
 import de.raindancer.modules.discordlink.service.InfoService;
 import de.raindancer.modules.discordlink.service.LinkService;
 import de.raindancer.modules.discordlink.service.PlayerFacts;
+import de.raindancer.modules.discordlink.service.PlayerResolver;
 import de.raindancer.modules.discordlink.service.Whitelist;
 import de.raindancer.modules.discordlink.store.LinkStore;
 import de.raindancer.modules.discordlink.store.RoleConfigStore;
@@ -53,6 +54,19 @@ class HushActionsTest {
     private LinkService links;
     private HushActions actions;
     private HushGroupWatcher watcher;
+    private final Map<String, String> mojang = new java.util.HashMap<>();
+    private final LinkNotes notes = new LinkNotes();
+    private final PlayerResolver resolver = new PlayerResolver(new PlayerResolver.Known() {
+        @Override
+        public Optional<PlayerResolver.Resolved> byName(String name) {
+            return name.equalsIgnoreCase("Alex") ? Optional.of(new PlayerResolver.Resolved(ALEX, "Alex")) : Optional.empty();
+        }
+
+        @Override
+        public Optional<String> nameOf(UUID id) {
+            return id.equals(ALEX) ? Optional.of("Alex") : Optional.empty();
+        }
+    }, url -> Optional.ofNullable(mojang.get(url)));
 
     @BeforeEach
     void setUp() {
@@ -88,7 +102,7 @@ class HushActionsTest {
         actions = new HushActions(links, new InfoService(facts), () -> groups, new RoleSyncRule(), (type, build) -> {
             answerTypes.add(type);
             answers.add(build.get());
-        }, now::get, Runnable::run, watcher);
+        }, now::get, Runnable::run, watcher, resolver, notes);
     }
 
     @AfterEach
@@ -230,7 +244,7 @@ class HushActionsTest {
         links.redeem(codes.issue(ALEX, "Alex", Purpose.LINK).orElseThrow(), "111", List.of(), false);
         List<String> told = new ArrayList<>();
         HushGroupWatcher quiet = new HushGroupWatcher(links, () -> groups, (type, build) -> told.add(type), now::get);
-        actions = new HushActions(links, null, () -> groups, new RoleSyncRule(), (type, build) -> { }, now::get, Runnable::run, quiet);
+        actions = new HushActions(links, null, () -> groups, new RoleSyncRule(), (type, build) -> { }, now::get, Runnable::run, quiet, resolver, notes);
         quiet.seed();
 
         actions.handle(action("g9", "set_groups").put("player", ALEX.toString())
@@ -268,5 +282,56 @@ class HushActionsTest {
 
         assertThat(w.check(ALEX)).isFalse();
         assertThat(told).isEmpty();
+    }
+
+    private static final UUID YEUK = UUID.fromString("8e8369df-3a97-450c-9d26-39cbf3a84a7f");
+
+    @Test
+    @DisplayName("link by hand: a name never seen here is resolved through Mojang, linked without a code, and noted as done by the staff member")
+    void linkByNameThroughMojang() {
+        mojang.put("https://api.mojang.com/users/profiles/minecraft/Yeukoula", "{\"name\":\"Yeukoula\",\"id\":\"8e8369df3a97450c9d2639cbf3a84a7f\"}");
+
+        actions.handle(action("l1", "link").put("player", "Yeukoula").put("discord", "111").put("by", "Raindancer118"));
+
+        DataObject result = answers.get(0);
+        assertThat(result.getBoolean("ok")).isTrue();
+        assertThat(result.getString("outcome")).isEqualTo("linked");
+        assertThat(result.getObject("data").getObject("player").getString("uuid")).isEqualTo(YEUK.toString());
+        assertThat(links.linkOf(YEUK).orElseThrow().discord()).isEqualTo("111");
+        assertThat(notes.take(YEUK)).contains("Raindancer118");
+        assertThat(whitelisted).isEmpty();
+    }
+
+    @Test
+    @DisplayName("link by hand: a UUID works too, the name comes from Mojang; an unknown name, a taken account and a repeat are answered, not crashes")
+    void linkByUuidAndTheRest() {
+        mojang.put("https://sessionserver.mojang.com/session/minecraft/profile/8e8369df3a97450c9d2639cbf3a84a7f", "{\"id\":\"8e8369df3a97450c9d2639cbf3a84a7f\",\"name\":\"Yeukoula\"}");
+
+        actions.handle(action("l2", "link").put("player", YEUK.toString()).put("discord", "111"));
+        actions.handle(action("l3", "link").put("player", "8e8369df3a97450c9d2639cbf3a84a7f").put("discord", "111"));
+        actions.handle(action("l4", "link").put("player", YEUK.toString()).put("discord", "222"));
+        actions.handle(action("l5", "link").put("player", "NoSuchPlayer").put("discord", "111"));
+        actions.handle(action("l6", "link").put("player", "bad name!").put("discord", "111"));
+
+        assertThat(links.linkOf(YEUK).orElseThrow().name()).isEqualTo("Yeukoula");
+        assertThat(answers.stream().map(a -> a.getString("outcome")).toList())
+                .containsExactly("linked", "already_yours", "someone_elses", "unknown_player", "unknown_player");
+        assertThat(answers.get(1).getBoolean("ok")).isTrue();
+        assertThat(answers.get(2).getBoolean("ok")).isFalse();
+        assertThat(notes.take(YEUK)).as("no staff name was given").isEmpty();
+    }
+
+    @Test
+    @DisplayName("unlink by player: only that account, found by name or UUID, noted as done by the staff member")
+    void unlinkByPlayer() {
+        links.redeem(codes.issue(ALEX, "Alex", Purpose.LINK).orElseThrow(), "111", List.of(), false);
+
+        actions.handle(action("u3", "unlink").put("player", "Alex").put("by", "Goomy"));
+        actions.handle(action("u4", "unlink").put("player", "Alex"));
+
+        assertThat(answers.get(0).getString("outcome")).isEqualTo("unlinked");
+        assertThat(links.linkOf(ALEX)).isEmpty();
+        assertThat(notes.take(ALEX)).contains("Goomy");
+        assertThat(answers.get(1).getString("outcome")).isEqualTo("not_linked");
     }
 }

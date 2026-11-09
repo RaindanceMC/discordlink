@@ -28,7 +28,8 @@ public final class DiscordLinkCommands {
                                 new DiscordLinkAdminCommand(DiscordLinkCommands::require))
                         .needing(ADMIN_NODE)
                         .taking("status", "restart", "token <token> | token clear — console only",
-                                "hushtoken <token> | hushtoken clear — console only", "hush status"));
+                                "hushtoken <token> | hushtoken clear — console only", "hush status",
+                                "link <name|uuid> <discord id> — links an account by hand", "unlink <name|uuid>"));
     }
 
     static void ready(DiscordLinkServices live) {
