@@ -51,7 +51,25 @@ public final class CorePlayerFacts implements PlayerFacts {
 
     @Override
     public Optional<String> rank(UUID player) {
-        return core.groups().primaryGroup(player);
+        // The rank they wear (RainsRanks, Core 2.77.0), else LuckPerms' group written as a title.
+        Optional<String> worn;
+        try {
+            worn = de.raindancer.core.ui.identity.RankTitles.of(player);
+        } catch (LinkageError olderCore) {
+            worn = Optional.empty();
+        }
+        return worn.or(() -> core.groups().primaryGroup(player).map(CorePlayerFacts::title));
+    }
+
+    /** "owner" → "Owner", "mc_admin" → "Mc Admin". */
+    static String title(String group) {
+        StringBuilder out = new StringBuilder();
+        for (String word : group.split("[_\\- ]+")) {
+            if (!word.isEmpty()) {
+                out.append(out.length() == 0 ? "" : " ").append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
+            }
+        }
+        return out.length() == 0 ? group : out.toString();
     }
 
     @Override

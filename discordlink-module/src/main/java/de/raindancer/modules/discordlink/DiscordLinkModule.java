@@ -47,7 +47,7 @@ import java.util.List;
  */
 public final class DiscordLinkModule implements FlexModule {
 
-    private static final ModuleInfo INFO = ModuleInfo.of("discordlink", "Discord Link", "0.12.0")
+    private static final ModuleInfo INFO = ModuleInfo.of("discordlink", "Discord Link", "0.12.1")
             .describedAs("Whitelisting and account links through Discord's /link; Discord roles give LuckPerms groups")
             .by("Raindancer118");
 
@@ -116,7 +116,17 @@ public final class DiscordLinkModule implements FlexModule {
             public java.util.Optional<String> nameOf(java.util.UUID id) {
                 return java.util.Optional.ofNullable(server.getOfflinePlayer(id).getName());
             }
-        }, new MojangHttp());
+        }, new MojangHttp(), typed -> {
+            // Core 2.74.0 (also remembers the answer); an older Core: Known and Mojang above
+            try {
+                var lookup = context.core().profileLookup();
+                return lookup.byNameOrId(typed).join().map(found -> new PlayerResolver.Resolved(found.id(),
+                        found.name() != null ? found.name()
+                                : lookup.nameOf(found.id()).orElse(found.id().toString().substring(0, 8))));
+            } catch (LinkageError | RuntimeException unavailable) {
+                return java.util.Optional.empty();
+            }
+        });
         LinkNotes notes = new LinkNotes();
         HushControl hush = startHush(context, settings::current, links, new InfoService(new CorePlayerFacts(context.core(), store)),
                 resolver, notes);

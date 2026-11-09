@@ -29,11 +29,18 @@ public final class PlayerResolver implements IDiscordLinkService {
 
     private final Known known;
     private final Function<String, Optional<String>> fetch;
+    private final Function<String, Optional<Resolved>> core;
 
     /** @param fetch an HTTPS GET: the body, or empty for 404 and every failure */
     public PlayerResolver(Known known, Function<String, Optional<String>> fetch) {
+        this(known, fetch, typed -> Optional.empty());
+    }
+
+    /** @param core RainsCore's ProfileLookup (2.74.0), asked first: it also remembers what Mojang answered; empty on an older Core */
+    public PlayerResolver(Known known, Function<String, Optional<String>> fetch, Function<String, Optional<Resolved>> core) {
         this.known = known;
         this.fetch = fetch;
+        this.core = core;
     }
 
     @Override
@@ -43,6 +50,10 @@ public final class PlayerResolver implements IDiscordLinkService {
 
     public Optional<Resolved> resolve(String typed) {
         String text = typed == null ? "" : typed.strip();
+        Optional<Resolved> viaCore = core.apply(text);
+        if (viaCore.isPresent()) {
+            return viaCore;
+        }
         Matcher uuid = UUID_TEXT.matcher(text);
         if (uuid.matches()) {
             UUID id = UUID.fromString(String.join("-", uuid.group(1), uuid.group(2), uuid.group(3), uuid.group(4), uuid.group(5)));
