@@ -41,7 +41,9 @@ public final class LinkCommand implements IDiscordLinkCommand {
             } else {
                 var code = live.links().codeToLink(player.getUniqueId(), player.getName());
                 key = code.isPresent() ? "discordlink.link.code" : "discordlink.link.failed";
-                values = new Object[]{"code", code.orElse(""), "minutes", String.valueOf(live.codes().lifetimeMinutes())};
+                values = java.util.stream.Stream.concat(java.util.Arrays.stream(new Object[]{"code", code.orElse(""),
+                        "minutes", String.valueOf(live.codes().lifetimeMinutes())}),
+                        java.util.Arrays.stream(live.settings().get().wording())).toArray();
             }
             String finalKey = key;
             Object[] finalValues = values;

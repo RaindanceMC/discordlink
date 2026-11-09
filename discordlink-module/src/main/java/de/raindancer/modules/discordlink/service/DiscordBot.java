@@ -687,6 +687,7 @@ public final class DiscordBot implements IDiscordLinkService {
 
     /** The network status board, stamped with when — the Refresh button below builds it again. */
     private net.dv8tion.jda.api.entities.MessageEmbed statusEmbed() {
+        statusView.network(settings.plainNetwork());
         return statusView.embed(info.status(), System.currentTimeMillis());
     }
 

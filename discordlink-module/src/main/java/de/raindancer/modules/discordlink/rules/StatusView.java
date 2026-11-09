@@ -26,6 +26,13 @@ public final class StatusView implements IDiscordLinkRule {
 
     private enum Health { GOOD, SLOW, ROUGH, DOWN }
 
+    private volatile String network = "Lilly's network";
+
+    /** What the title calls the network. */
+    public void network(String name) {
+        this.network = name == null || name.isBlank() ? "Lilly's network" : name;
+    }
+
     public MessageEmbed embed(NetworkStatus status, long now) {
         long up = status.servers().stream().filter(NetworkStatus.Line::online).count();
         int total = status.servers().size();
@@ -36,9 +43,9 @@ public final class StatusView implements IDiscordLinkRule {
         } else if (up < total) {
             embed.setTitle("🟠 " + up + " of " + total + " servers are up").setColor(ORANGE);
         } else if (slow) {
-            embed.setTitle("🟡 Lilly's network is up, but a bit slow").setColor(YELLOW);
+            embed.setTitle("🟡 " + network + " is up, but a bit slow").setColor(YELLOW);
         } else {
-            embed.setTitle("🟢 Lilly's network is running smoothly").setColor(GREEN);
+            embed.setTitle("🟢 " + network + " is running smoothly").setColor(GREEN);
         }
         embed.setDescription("**" + status.online() + "** player" + (status.online() == 1 ? "" : "s") + " online · **"
                 + up + "** of **" + total + "** servers up");

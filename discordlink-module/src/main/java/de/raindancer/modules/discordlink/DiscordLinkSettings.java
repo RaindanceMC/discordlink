@@ -102,12 +102,44 @@ public record DiscordLinkSettings(
 
         @In("discordlink") @Title("Hush: ask every, seconds") @Range(min = 1, max = 60)
         @Key("hush.poll-seconds")
-        int hushPollSeconds) {
+        int hushPollSeconds,
+
+        @In("discordlink") @Title("Wording: the Discord server")
+        @Describe("How in-game messages call the Discord server, MiniMessage allowed: \"Type /link CODE in <discord>\".")
+        @Key("discord-name")
+        String discordName,
+
+        @In("discordlink") @Title("Wording: the network")
+        @Describe("How Discord's /status calls the network, plain text: \"<name> is running smoothly\".")
+        @Key("network-name")
+        String networkName,
+
+        @In("discordlink") @Title("Wording: accent colour")
+        @Describe("The colour of the /link code on screen: a MiniMessage colour like light_purple or #6EC1EA.")
+        @Key("accent")
+        String accent) {
 
     public static final String HUSH_URL = "https://hush.raindancer118.de/api/minecraft/events";
 
     public static final DiscordLinkSettings DEFAULTS = new DiscordLinkSettings(true, "", true, 30, 30, "", "",
-            "https://applications.lillyyxoxo.net", HUSH_URL, "", true, true, true, true, true, true, 3);
+            "https://applications.lillyyxoxo.net", HUSH_URL, "", true, true, true, true, true, true, 3,
+            "<#5865F2>Lilly's Discord</#5865F2>", "Lilly's network", "light_purple");
+
+    /** Placeholders for the messages that name the Discord server and the network. */
+    public Object[] wording() {
+        // markup on purpose: both are written by the server owner, never by a player
+        return new Object[]{"discord", de.raindancer.core.ui.text.Markup.of(orElse(discordName, DEFAULTS.discordName())),
+                "accent", de.raindancer.core.ui.text.Markup.of(orElse(accent, DEFAULTS.accent()))};
+    }
+
+    /** The network's name without MiniMessage tags, for Discord. */
+    public String plainNetwork() {
+        return orElse(networkName, DEFAULTS.networkName()).replaceAll("<[^>]*>", "");
+    }
+
+    private static String orElse(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value.strip();
+    }
 
     public boolean hasLookupGuild() {
         return lookupGuildId != null && lookupGuildId.strip().matches("\\d{15,25}");

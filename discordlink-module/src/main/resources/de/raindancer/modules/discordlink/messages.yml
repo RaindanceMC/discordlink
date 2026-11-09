@@ -8,10 +8,10 @@ discordlink:
   not-running: "<yellow>The Discord bot isn't running right now, so there's nothing to link to. Try again in a bit."
 
   join:
-    kick: "<white><bold>You're not on the whitelist yet</bold></white>\n\n<gray>Type this in <#5865F2>Lilly's Discord</#5865F2>:</gray>\n<light_purple><bold>/link <code></bold></light_purple>\n\n<gray>The bot whitelists you. Then join again.\n<dark_gray>The code lasts <minutes> minutes."
+    kick: "<white><bold>You're not on the whitelist yet</bold></white>\n\n<gray>Type this in <discord>:</gray>\n<<accent>><bold>/link <code></bold></<accent>>\n\n<gray>The bot whitelists you. Then join again.\n<dark_gray>The code lasts <minutes> minutes."
 
   link:
-    code: "<gray>Type <white><bold>/link <code></bold></white> in Lilly's Discord to link your account. <dark_gray>(lasts <minutes> minutes)"
+    code: "<gray>Type <white><bold>/link <code></bold></white> in <discord> to link your account. <dark_gray>(lasts <minutes> minutes)"
     already: "<gray>Your account is already linked to Discord. <white>/link unlink</white> undoes it."
     unlinked: "<gray>Unlinked. Your Discord account and this player aren't connected anymore."
     not-linked: "<gray>Nothing to unlink, your account isn't linked."
@@ -35,7 +35,7 @@ discordlink:
     lookupkey-cleared: "<gray>Lookup key removed. /lookup shows only what the server knows."
 
   discord:
-    not-here: "This only works on Lilly's Discord server."
+    not-here: "This only works on the network's own Discord server."
     failed: "Something went wrong on our side. Try again in a minute."
     lookup-not-here: "/lookup only works on the staff server."
     lookup-no-key: "Nobody by that name on the Minecraft server, and the website isn't connected yet (/discordlink lookupkey)."

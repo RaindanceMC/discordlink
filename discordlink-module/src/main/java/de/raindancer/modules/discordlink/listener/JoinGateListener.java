@@ -43,8 +43,13 @@ public final class JoinGateListener implements IDiscordLinkListener {
             return;   // the database is down: vanilla's message is still true
         }
         event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST, LeaveScreen.framed(
-                services.messages().get("discordlink.join.kick", "code", code.get(),
-                        "minutes", String.valueOf(services.codes().lifetimeMinutes()))));
+                services.messages().get("discordlink.join.kick", wording(services, "code", code.get(),
+                        "minutes", String.valueOf(services.codes().lifetimeMinutes())))));
+    }
+
+    private static Object[] wording(DiscordLinkServices services, Object... values) {
+        return java.util.stream.Stream.concat(java.util.Arrays.stream(values),
+                java.util.Arrays.stream(services.settings().get().wording())).toArray();
     }
 
     @Override
