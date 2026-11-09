@@ -12,6 +12,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BiConsumer;
 import java.util.function.LongSupplier;
 
 /**
@@ -25,6 +26,7 @@ public final class LinkService implements IDiscordLinkService {
     public record Result(Outcome outcome, String player, List<Link> yours) {
     }
 
+    private final List<BiConsumer<Link, Boolean>> watchers = new java.util.concurrent.CopyOnWriteArrayList<>();
     private final CodeService codes;
     private final LinkStore store;
     private final RoleConfigStore roles;
@@ -49,6 +51,14 @@ public final class LinkService implements IDiscordLinkService {
 
     /** Discord's /link: the code proves the Minecraft account is theirs. */
     public Result redeem(String typed, String discord, Collection<String> memberRoles) {
+        return redeem(typed, discord, memberRoles, true);
+    }
+
+    /**
+     * @param whitelisting false for a network without a whitelist (Hush's /link): a join code then only links, it
+     *                     never puts anybody on a list
+     */
+    public Result redeem(String typed, String discord, Collection<String> memberRoles, boolean whitelisting) {
         CodeService.Redeemed redeemed = codes.redeem(typed, discord);
         if (redeemed.code().isEmpty()) {
             return new Result(redeemed.failure() == CodeService.Failure.TOO_MANY_TRIES ? Outcome.TOO_MANY_TRIES : Outcome.WRONG_CODE,
@@ -61,7 +71,7 @@ public final class LinkService implements IDiscordLinkService {
         switch (verdict) {
             case ALREADY_YOURS -> {
                 // Linked before, then off the whitelist: the join code still proves the account is theirs.
-                if (code.purpose() == Purpose.JOIN && !whitelist.isWhitelisted(code.player())) {
+                if (whitelisting && code.purpose() == Purpose.JOIN && !whitelist.isWhitelisted(code.player())) {
                     whitelist.add(code.player(), code.name(), "discord:" + discord);
                     return new Result(Outcome.WHITELISTED_AGAIN, code.name(), theirs);
                 }
@@ -76,11 +86,13 @@ public final class LinkService implements IDiscordLinkService {
             case OK -> {
             }
         }
-        if (!store.link(new Link(code.player(), code.name(), discord, clock.getAsLong()))) {
+        Link made = new Link(code.player(), code.name(), discord, clock.getAsLong());
+        if (!store.link(made)) {
             return new Result(Outcome.FAILED, code.name(), theirs);
         }
-        boolean newlyWhitelisted = code.purpose() == Purpose.JOIN && !whitelist.isWhitelisted(code.player());
-        if (code.purpose() == Purpose.JOIN) {
+        changed(made, true);
+        boolean newlyWhitelisted = whitelisting && code.purpose() == Purpose.JOIN && !whitelist.isWhitelisted(code.player());
+        if (whitelisting && code.purpose() == Purpose.JOIN) {
             whitelist.add(code.player(), code.name(), "discord:" + discord);
         }
         return new Result(newlyWhitelisted ? Outcome.LINKED_AND_WHITELISTED : Outcome.LINKED, code.name(), store.linksOf(discord));
@@ -95,7 +107,31 @@ public final class LinkService implements IDiscordLinkService {
     }
 
     public boolean unlink(UUID player) {
-        return store.unlink(player);
+        Optional<Link> was = store.linkOf(player);
+        boolean done = store.unlink(player);
+        if (done) {
+            was.ifPresent(link -> changed(link, false));
+        }
+        return done;
+    }
+
+    /** Told after every link made or ended, whoever did it (Discord's /link, in-game /link unlink, Hush). */
+    public void onChange(BiConsumer<Link, Boolean> watcher) {
+        watchers.add(watcher);
+    }
+
+    private void changed(Link link, boolean linked) {
+        for (BiConsumer<Link, Boolean> watcher : watchers) {
+            try {
+                watcher.accept(link, linked);
+            } catch (RuntimeException failed) {
+                // a watcher's mistake must not undo a link
+            }
+        }
+    }
+
+    public List<Link> all() {
+        return store.all();
     }
 
     public List<String> allDiscordIds() {

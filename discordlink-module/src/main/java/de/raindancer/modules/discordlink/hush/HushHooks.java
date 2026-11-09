@@ -37,6 +37,10 @@ public final class HushHooks implements AutoCloseable {
                 moderation.onReport(report -> {
                     long at = clock.getAsLong();
                     sink.accept("report", () -> HushEvents.report(at, report));
+                }),
+                moderation.onAdminMode(notice -> {
+                    long at = clock.getAsLong();
+                    sink.accept("admin", () -> HushEvents.adminMode(at, notice, names));
                 }));
     }
 

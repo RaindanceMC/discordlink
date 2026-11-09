@@ -18,7 +18,7 @@ class DiscordLinkSettingsTest {
         DiscordLinkSettings d = DiscordLinkSettings.DEFAULTS;
         return new DiscordLinkSettings(d.enabled(), guild, d.joinCodes(), d.codeMinutes(), d.syncMinutes(), more,
                 STAFF, d.lookupUrl(), d.hushUrl(), d.hushServerName(), d.hushAnticheat(), d.hushPunishments(),
-                d.hushReports(), d.hushServer());
+                d.hushReports(), d.hushServer(), d.hushAdminMode(), d.hushActions(), d.hushPollSeconds());
     }
 
     @Test

@@ -1,5 +1,6 @@
 package de.raindancer.modules.discordlink.hush;
 
+import de.raindancer.core.moderation.feed.AdminModeNotice;
 import de.raindancer.core.moderation.feed.AnticheatAlert;
 import de.raindancer.core.moderation.feed.PunishmentNotice;
 import de.raindancer.core.moderation.feed.ReportNotice;
@@ -13,7 +14,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 
-/** The JSON of each event type of Hush's Minecraft feed (protocol v1). Pure. */
+/** The JSON of each event type of Hush's Minecraft feed (protocol v2, see Hush's docs/MINECRAFT.md). Pure. */
 public final class HushEvents {
 
     public static final int VERBOSE_MAX = 300;
@@ -80,10 +81,65 @@ public final class HushEvents {
         return event;
     }
 
+    /** Staff went into or came out of admin mode; the duration is only on leaving, and only when known. */
+    public static DataObject adminMode(long at, AdminModeNotice notice, Function<UUID, String> names) {
+        DataObject event = DataObject.empty().put("type", "admin").put("at", at)
+                .put("player", who(names.apply(notice.player()), notice.player()))
+                .put("state", notice.entered() ? "enter" : "leave");
+        if (!notice.entered() && notice.durationMillis() > 0) {
+            event.put("duration", notice.durationMillis());
+        }
+        return event;
+    }
+
+    /** The answer to an action Hush sent (protocol v2): {@code ref} is the action's id. */
+    public static DataObject result(long at, String ref, boolean ok, String outcome, DataObject data) {
+        DataObject event = DataObject.empty().put("type", "result").put("at", at).put("ref", cut(ref, 64))
+                .put("ok", ok).put("outcome", cut(outcome, 64));
+        if (data != null) {
+            event.put("data", data);
+        }
+        return event;
+    }
+
+    /** A Minecraft account was linked to a Discord account, or the link ended. */
+    public static DataObject link(long at, String action, UUID player, String name, String discord) {
+        return DataObject.empty().put("type", "link").put("at", at).put("action", action)
+                .put("player", who(name, player)).put("discord", discord);
+    }
+
+    /** Every link there is, for Hush to compare with what it knows. */
+    public static DataObject links(long at, java.util.List<DataObject> entries) {
+        DataArray array = DataArray.empty();
+        entries.forEach(array::add);
+        return DataObject.empty().put("type", "links").put("at", at).put("entries", array);
+    }
+
+    /** Somebody's direct LuckPerms groups, after a change here. */
+    public static DataObject groups(long at, UUID player, String name, String discord, java.util.Collection<String> groups) {
+        DataArray array = DataArray.empty();
+        groups.stream().sorted().forEach(array::add);
+        return DataObject.empty().put("type", "groups").put("at", at).put("player", who(name, player))
+                .put("discord", discord).put("groups", array);
+    }
+
+    public static DataObject linkEntry(UUID player, String name, String discord) {
+        return DataObject.empty().put("player", who(name, player)).put("discord", discord);
+    }
+
     public static String body(String server, List<DataObject> events) {
+        return body(server, events, null);
+    }
+
+    /** @param access "whitelist" while this server only lets whitelisted players in, "open" otherwise; null = not said */
+    public static String body(String server, List<DataObject> events, String access) {
         DataArray array = DataArray.empty();
         events.forEach(array::add);
-        return DataObject.empty().put("v", 1).put("server", server).put("events", array).toString();
+        DataObject body = DataObject.empty().put("v", 2).put("server", server).put("events", array);
+        if (access != null) {
+            body.put("access", access);
+        }
+        return body.toString();
     }
 
     private static DataObject who(String name, UUID id) {

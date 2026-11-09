@@ -296,4 +296,79 @@ class HushFeedTest {
         assertThat(transport.bodies).allSatisfy(body -> assertThat(body.getBytes(java.nio.charset.StandardCharsets.UTF_8).length)
                 .isLessThanOrEqualTo(64 * 1024));
     }
+
+    private static HushConfig withActions(HushConfig c) {
+        return new HushConfig(c.url(), c.serverName(), c.token(), true, true, true, true, true, true, 3);
+    }
+
+    @Test
+    @DisplayName("with actions on, an idle feed asks Hush every poll interval with an empty batch")
+    void polls() {
+        config = withActions(config);
+        feed.pump(false);
+        assertThat(transport.bodies).as("just started: asks right away").hasSize(1);
+        assertThat(transport.events(0)).isZero();
+
+        clock.addAndGet(2_999);
+        feed.pump(false);
+        assertThat(transport.bodies).hasSize(1);
+        clock.addAndGet(1);
+        feed.pump(false);
+        assertThat(transport.bodies).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("with actions off, an idle feed sends nothing")
+    void noPollWithoutActions() {
+        clock.addAndGet(60_000);
+        feed.pump(false);
+        assertThat(transport.bodies).isEmpty();
+    }
+
+    @Test
+    @DisplayName("the actions in Hush's answer go to the action sink, in order; junk in the body is nothing")
+    void takesActions() {
+        config = withActions(config);
+        List<String> got = new ArrayList<>();
+        feed.actions(action -> got.add(action.getString("id")));
+        transport.script.add(Response.status(200, -1, "{\"accepted\":0,\"actions\":[{\"id\":\"a\",\"type\":\"redeem\"},{\"id\":\"b\",\"type\":\"unlink\"}]}"));
+        transport.script.add(Response.status(200, -1, "<html>bad gateway</html>"));
+        transport.script.add(Response.status(200, -1, "{\"accepted\":0}"));
+
+        feed.pump(false);
+        assertThat(got).containsExactly("a", "b");
+        clock.addAndGet(1_000);
+        feed.pump(false);
+        clock.addAndGet(3_000);
+        feed.pump(false);
+        assertThat(got).hasSize(2);
+        assertThat(warnings).isEmpty();
+    }
+
+    @Test
+    @DisplayName("after actions arrived, the next question comes after a second, not three")
+    void fastAfterActions() {
+        config = withActions(config);
+        feed.actions(action -> { });
+        transport.script.add(Response.status(200, -1, "{\"accepted\":0,\"actions\":[{\"id\":\"a\",\"type\":\"redeem\"}]}"));
+        feed.pump(false);
+        clock.addAndGet(1_000);
+        feed.pump(false);
+        assertThat(transport.bodies).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("every request says what the server lets in")
+    void saysAccess() {
+        config = withActions(config);
+        feed.access(() -> "whitelist");
+        feed.pump(false);
+        assertThat(DataObject.fromJson(transport.bodies.get(0)).getString("access")).isEqualTo("whitelist");
+        feed.access(() -> {
+            throw new IllegalStateException("no server yet");
+        });
+        clock.addAndGet(3_000);
+        feed.pump(false);
+        assertThat(DataObject.fromJson(transport.bodies.get(1)).hasKey("access")).isFalse();
+    }
 }

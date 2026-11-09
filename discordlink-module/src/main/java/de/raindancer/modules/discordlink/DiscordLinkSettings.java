@@ -87,12 +87,27 @@ public record DiscordLinkSettings(
 
         @In("discordlink") @Title("Hush feed: server start and stop")
         @Key("hush.server")
-        boolean hushServer) {
+        boolean hushServer,
+
+        @In("discordlink") @Title("Hush feed: admin mode")
+        @Describe("Staff entering and leaving admin mode, with how long they stayed.")
+        @Key("hush.admin-mode")
+        boolean hushAdminMode,
+
+        @In("discordlink") @Title("Hush: actions from Discord")
+        @Describe("Asks Hush every few seconds whether Discord wants something done here: /link and /unlink, /player, "
+                + "and Discord roles and in-game groups kept the same. Off: the feed only sends.")
+        @Key("hush.actions")
+        boolean hushActions,
+
+        @In("discordlink") @Title("Hush: ask every, seconds") @Range(min = 1, max = 60)
+        @Key("hush.poll-seconds")
+        int hushPollSeconds) {
 
     public static final String HUSH_URL = "https://hush.raindancer118.de/api/minecraft/events";
 
     public static final DiscordLinkSettings DEFAULTS = new DiscordLinkSettings(true, "", true, 30, 30, "", "",
-            "https://applications.lillyyxoxo.net", HUSH_URL, "", true, true, true, true);
+            "https://applications.lillyyxoxo.net", HUSH_URL, "", true, true, true, true, true, true, 3);
 
     public boolean hasLookupGuild() {
         return lookupGuildId != null && lookupGuildId.strip().matches("\\d{15,25}");

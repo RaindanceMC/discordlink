@@ -75,4 +75,21 @@ class HushHooksTest {
         marker.clean();
         assertThat(marker.begin()).as("after a clean stop").isFalse();
     }
+
+    @Test
+    @DisplayName("admin mode switches arrive as admin events: the way out carries the duration, the way in none")
+    void adminMode() {
+        connect();
+        moderation.adminMode(new de.raindancer.core.moderation.feed.AdminModeNotice(ALICE, true, 0));
+        moderation.adminMode(new de.raindancer.core.moderation.feed.AdminModeNotice(ALICE, false, 90_000));
+
+        assertThat(types).containsExactly("admin", "admin");
+        DataObject in = recipes.get(0).get();
+        DataObject out = recipes.get(1).get();
+        assertThat(in.getString("state")).isEqualTo("enter");
+        assertThat(in.hasKey("duration")).isFalse();
+        assertThat(in.getObject("player").getString("name")).isEqualTo("Alice");
+        assertThat(out.getString("state")).isEqualTo("leave");
+        assertThat(out.getLong("duration")).isEqualTo(90_000L);
+    }
 }

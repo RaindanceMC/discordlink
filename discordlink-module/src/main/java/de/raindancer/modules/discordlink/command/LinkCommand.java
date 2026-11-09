@@ -36,7 +36,7 @@ public final class LinkCommand implements IDiscordLinkCommand {
                 key = live.links().unlink(player.getUniqueId()) ? "discordlink.link.unlinked" : "discordlink.link.not-linked";
             } else if (live.links().linkOf(player.getUniqueId()).isPresent()) {
                 key = "discordlink.link.already";
-            } else if (!live.bot().runningSomewhere()) {
+            } else if (!live.bot().runningSomewhere() && !live.hush().config().actionsReady()) {
                 key = "discordlink.not-running";
             } else {
                 var code = live.links().codeToLink(player.getUniqueId(), player.getName());

@@ -30,6 +30,8 @@ public final class HushFeed implements AutoCloseable {
     static final int MAX_BODY_BYTES = 64 * 1024;
     /** The pump's own beat; the 2 s flush is checked against it. */
     private static final long BEAT_MILLIS = 250;
+    private static final long FAST_POLL_MILLIS = 1_000;
+    private static final long FAST_FOR_MILLIS = 20_000;
 
     private record Queued(String type, DataObject event, long at) {
     }
@@ -61,6 +63,13 @@ public final class HushFeed implements AutoCloseable {
     private final long flushMillis;
 
     private final ArrayDeque<Queued> queue = new ArrayDeque<>();
+    private volatile Supplier<String> accessSource = () -> null;
+    private volatile Consumer<DataObject> actionSink = action -> { };
+    /** Set when something urgent (an answer somebody is waiting for) is queued: it goes without the 2 s wait. */
+    private boolean urgent;
+    private long lastContact;
+    /** While Hush has things for us the next question comes sooner, so a chain of them does not crawl. */
+    private long fastUntil;
     private long retryAt;
     private int failures;
     private boolean warned;
@@ -105,6 +114,10 @@ public final class HushFeed implements AutoCloseable {
      * {@code build} runs there too: it may look up names.
      */
     public void offer(String type, Supplier<DataObject> build) {
+        offer(type, build, false);
+    }
+
+    private void offer(String type, Supplier<DataObject> build, boolean now) {
         ExecutorService run = executor;
         if (run == null) {
             return;
@@ -120,7 +133,8 @@ public final class HushFeed implements AutoCloseable {
                         return;
                     }
                     enqueue(type, event);
-                    if (queue.size() >= MAX_BATCH) {
+                    urgent |= now;
+                    if (now || queue.size() >= MAX_BATCH) {
                         pump(false);
                     }
                 } catch (RuntimeException | LinkageError broken) {
@@ -131,6 +145,29 @@ public final class HushFeed implements AutoCloseable {
         } catch (RuntimeException rejected) {
             // shut down: the server is going away
         }
+    }
+
+    /** Where the actions Hush sends back go (protocol v2); called on the feed's thread, so it must only hand over. */
+    public void actions(Consumer<DataObject> sink) {
+        this.actionSink = sink == null ? action -> { } : sink;
+    }
+
+    /** What the server lets in right now ("whitelist" or "open"), read for every request; may block briefly, never throws. */
+    public void access(Supplier<String> source) {
+        this.accessSource = source == null ? () -> null : source;
+    }
+
+    private String accessNow() {
+        try {
+            return accessSource.get();
+        } catch (RuntimeException unknown) {
+            return null;
+        }
+    }
+
+    /** Like {@link #offer}, but not held back for the flush time: somebody waits for this answer. */
+    public void offerNow(String type, Supplier<DataObject> build) {
+        offer(type, build, true);
     }
 
     /** Sends what is left, for at most {@code waitMillis}, and stops. */
@@ -202,19 +239,23 @@ public final class HushFeed implements AutoCloseable {
         try {
             long now = clock.getAsLong();
             expire(now);
-            if (queue.isEmpty()) {
-                return;
-            }
             HushConfig cfg = config.get();
             if (!cfg.hasToken()) {
                 queue.clear();
                 queued = 0;
                 return;
             }
+            if (queue.isEmpty()) {
+                long every = (now < fastUntil ? FAST_POLL_MILLIS : cfg.pollSeconds() * 1000L);
+                if (cfg.actions() && !force && now >= retryAt && now - lastContact >= every) {
+                    sendBatch(cfg, now);
+                }
+                return;
+            }
             boolean first = true;
             while (!queue.isEmpty()) {
                 now = clock.getAsLong();
-                boolean due = queue.size() >= MAX_BATCH || now - queue.peek().at() >= flushMillis;
+                boolean due = urgent || queue.size() >= MAX_BATCH || now - queue.peek().at() >= flushMillis;
                 if (!(first && force) && (now < retryAt || !(due || force))) {
                     return;
                 }
@@ -223,6 +264,7 @@ public final class HushFeed implements AutoCloseable {
                     return;
                 }
             }
+            urgent = false;
         } catch (RuntimeException | LinkageError broken) {
             noteFailure(clock.getAsLong(), broken.getClass().getSimpleName(), false, -1);
         } finally {
@@ -245,8 +287,8 @@ public final class HushFeed implements AutoCloseable {
         List<Queued> batch;
         while (true) {
             batch = new ArrayList<>(queue.stream().limit(size).toList());
-            body = HushEvents.body(cfg.serverName(), batch.stream().map(Queued::event).toList());
-            if (size == 1 || body.getBytes(StandardCharsets.UTF_8).length <= MAX_BODY_BYTES) {
+            body = HushEvents.body(cfg.serverName(), batch.stream().map(Queued::event).toList(), accessNow());
+            if (size <= 1 || body.getBytes(StandardCharsets.UTF_8).length <= MAX_BODY_BYTES) {
                 break;
             }
             size = Math.max(1, size / 2);
@@ -265,6 +307,8 @@ public final class HushFeed implements AutoCloseable {
                 }
                 sent += batch.size();
                 lastSuccessAt = now;
+                lastContact = now;
+                takeActions(cfg, response.body(), now);
                 if (failures > 0 && warned) {
                     info.accept("Hush feed is reachable again.");
                 }
@@ -285,6 +329,33 @@ public final class HushFeed implements AutoCloseable {
                 noteFailure(now, describe(response), false, -1);
                 return false;
             }
+        }
+    }
+
+    /** Protocol v2: the answer may carry actions for this server. A body that is not that is simply nothing. */
+    private void takeActions(HushConfig cfg, String body, long now) {
+        if (!cfg.actions() || body == null || body.isBlank()) {
+            return;
+        }
+        try {
+            DataObject answer = DataObject.fromJson(body);
+            if (!answer.hasKey("actions") || answer.isNull("actions")) {
+                return;
+            }
+            var actions = answer.getArray("actions");
+            for (int i = 0; i < actions.length(); i++) {
+                try {
+                    actionSink.accept(actions.getObject(i));
+                } catch (RuntimeException broken) {
+                    lastFailure = "could not take an action: " + broken.getClass().getSimpleName();
+                    lastFailureAt = now;
+                }
+            }
+            if (actions.length() > 0) {
+                fastUntil = now + FAST_FOR_MILLIS;
+            }
+        } catch (RuntimeException notJson) {
+            // an older Hush, or a proxy's error page: nothing to do
         }
     }
 

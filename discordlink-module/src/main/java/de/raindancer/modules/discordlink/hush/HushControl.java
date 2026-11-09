@@ -51,7 +51,8 @@ public final class HushControl {
         DiscordLinkSettings now = settings.get();
         String name = now.hushServerName() == null ? "" : now.hushServerName().strip();
         return new HushConfig(now.hushUrl(), name.isEmpty() ? networkId.get() : name, token(),
-                now.hushAnticheat(), now.hushPunishments(), now.hushReports(), now.hushServer());
+                now.hushAnticheat(), now.hushPunishments(), now.hushReports(), now.hushServer(),
+                now.hushAdminMode(), now.hushActions(), now.hushPollSeconds());
     }
 
     private HushToken token() {

@@ -34,9 +34,9 @@ public final class HttpHushTransport implements HushTransport {
             return new Response(BAD_URL, -1, "the url is not valid");
         }
         try {
-            HttpResponse<Void> response = http.send(request, HttpResponse.BodyHandlers.discarding());
+            HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             long retryAfter = response.headers().firstValue("Retry-After").map(HttpHushTransport::seconds).orElse(-1L);
-            return Response.status(response.statusCode(), retryAfter);
+            return Response.status(response.statusCode(), retryAfter, response.body() == null ? "" : response.body());
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             return new Response(IO_FAILURE, -1, "interrupted");

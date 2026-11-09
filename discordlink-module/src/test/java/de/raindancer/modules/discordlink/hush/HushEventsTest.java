@@ -142,14 +142,38 @@ class HushEventsTest {
     }
 
     @Test
-    @DisplayName("the body is {v:1, server, events:[…]}")
+    @DisplayName("the body is {v:2, server, events:[…]} and says what the server lets in when asked to")
     void body() {
         String json = HushEvents.body("beta-smp", List.of(HushEvents.server(NOW, "stop", null), HushEvents.server(NOW, "start", null)));
         DataObject parsed = DataObject.fromJson(json);
-        assertThat(parsed.getInt("v")).isEqualTo(1);
+        assertThat(parsed.getInt("v")).isEqualTo(2);
+        assertThat(parsed.hasKey("access")).isFalse();
+        assertThat(DataObject.fromJson(HushEvents.body("x", List.of(), "whitelist")).getString("access")).isEqualTo("whitelist");
         assertThat(parsed.getString("server")).isEqualTo("beta-smp");
         DataArray events = parsed.getArray("events");
         assertThat(events.length()).isEqualTo(2);
         assertThat(events.getObject(0).getString("state")).isEqualTo("stop");
+    }
+
+    @Test
+    @DisplayName("v2 events: result, link, links and groups carry what Hush needs and nothing else")
+    void v2Events() {
+        java.util.UUID id = java.util.UUID.randomUUID();
+        DataObject result = HushEvents.result(NOW, "a1", true, "linked", DataObject.empty().put("x", 1));
+        assertThat(result.getString("type")).isEqualTo("result");
+        assertThat(result.getString("ref")).isEqualTo("a1");
+        assertThat(result.getBoolean("ok")).isTrue();
+        assertThat(HushEvents.result(NOW, "a2", false, "wrong_code", null).hasKey("data")).isFalse();
+
+        DataObject link = HushEvents.link(NOW, "linked", id, "Alex", "111");
+        assertThat(link.getString("action")).isEqualTo("linked");
+        assertThat(link.getString("discord")).isEqualTo("111");
+        assertThat(link.getObject("player").getString("uuid")).isEqualTo(id.toString());
+
+        DataObject groups = HushEvents.groups(NOW, id, "Alex", "111", List.of("mod", "admin"));
+        assertThat(groups.getArray("groups").toList()).containsExactly("admin", "mod");
+
+        DataObject links = HushEvents.links(NOW, List.of(HushEvents.linkEntry(id, "Alex", "111")));
+        assertThat(links.getArray("entries").length()).isEqualTo(1);
     }
 }
