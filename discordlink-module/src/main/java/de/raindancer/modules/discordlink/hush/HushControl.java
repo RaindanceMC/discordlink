@@ -5,6 +5,8 @@ import de.raindancer.modules.discordlink.DiscordLinkSettings;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BiPredicate;
+import java.util.function.Function;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
@@ -15,16 +17,26 @@ public final class HushControl {
     /** The token is shared by the network's servers through the secrets table; a change elsewhere is picked up within this. */
     static final long REREAD_MILLIS = 30_000;
 
-    private final Secrets secrets;
+    private final Function<String, Optional<String>> read;
+    private final BiPredicate<String, String> write;
     private final Supplier<DiscordLinkSettings> settings;
     private final Supplier<String> networkId;
     private final LongSupplier clock;
     private volatile HushFeed feed;
     private volatile HushToken token = new HushToken("");
-    private volatile long readAt = Long.MIN_VALUE;
+    // not Long.MIN_VALUE: now - MIN_VALUE overflows to a negative number and the saved token was never read
+    private volatile long readAt;
+    private volatile boolean everRead;
 
     public HushControl(Secrets secrets, Supplier<DiscordLinkSettings> settings, Supplier<String> networkId, LongSupplier clock) {
-        this.secrets = secrets;
+        this(secrets::text, (name, value) -> value == null ? secrets.remove(name) : secrets.putText(name, value), settings, networkId, clock);
+    }
+
+    /** {@code write} gets a null value to remove the secret. */
+    HushControl(Function<String, Optional<String>> read, BiPredicate<String, String> write, Supplier<DiscordLinkSettings> settings,
+                Supplier<String> networkId, LongSupplier clock) {
+        this.read = read;
+        this.write = write;
         this.settings = settings;
         this.networkId = networkId;
         this.clock = clock;
@@ -44,9 +56,10 @@ public final class HushControl {
 
     private HushToken token() {
         long now = clock.getAsLong();
-        if (now - readAt >= REREAD_MILLIS) {
+        if (!everRead || now - readAt >= REREAD_MILLIS) {
+            everRead = true;
             readAt = now;
-            token = new HushToken(secrets.text(TOKEN_SECRET).orElse(""));
+            token = new HushToken(read.apply(TOKEN_SECRET).orElse(""));
         }
         return token;
     }
@@ -54,9 +67,10 @@ public final class HushControl {
     /** @return whether it was saved */
     public boolean setToken(String value) {
         HushToken fresh = new HushToken(value);
-        boolean done = fresh.isBlank() ? secrets.remove(TOKEN_SECRET) : secrets.putText(TOKEN_SECRET, fresh.value());
+        boolean done = write.test(TOKEN_SECRET, fresh.isBlank() ? null : fresh.value());
         if (done) {
             token = fresh;
+            everRead = true;
             readAt = clock.getAsLong();
         }
         return done;
