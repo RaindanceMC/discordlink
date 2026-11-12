@@ -176,4 +176,62 @@ class HushEventsTest {
         DataObject links = HushEvents.links(NOW, List.of(HushEvents.linkEntry(id, "Alex", "111")));
         assertThat(links.getArray("entries").length()).isEqualTo(1);
     }
+
+    private static de.raindancer.core.moderation.feed.AdminSessionRecap recap(List<de.raindancer.core.moderation.feed.AdminSessionRecap.Line> commands) {
+        return new de.raindancer.core.moderation.feed.AdminSessionRecap(NOW, NOW + 60_000, commands, 2,
+                List.of(new de.raindancer.core.moderation.feed.AdminSessionRecap.Line(NOW + 5_000, "banned Bob — x-ray")), 0,
+                Map.of("STONE", 3), Map.of(), 1, List.of("world_nether"), List.of("SURVIVAL → CREATIVE"));
+    }
+
+    private static DataObject left(de.raindancer.core.moderation.feed.AdminSessionRecap recap) {
+        return HushEvents.adminMode(NOW, new de.raindancer.core.moderation.feed.AdminModeNotice(MOD, false, 60_000, recap),
+                id -> NAMES.getOrDefault(id, id.toString()));
+    }
+
+    @Test
+    @DisplayName("leaving admin mode carries the recap: commands in order with their time, audited actions, changes")
+    void adminRecap() {
+        DataObject event = left(recap(List.of(
+                new de.raindancer.core.moderation.feed.AdminSessionRecap.Line(NOW + 1_000, "/gamemode creative"),
+                new de.raindancer.core.moderation.feed.AdminSessionRecap.Line(NOW + 2_000, "/ban Bob x-ray"))));
+
+        DataObject recap = event.getObject("recap");
+        assertThat(recap.getLong("start")).isEqualTo(NOW);
+        assertThat(recap.getLong("end")).isEqualTo(NOW + 60_000);
+        DataArray commands = recap.getArray("commands");
+        assertThat(commands.length()).isEqualTo(2);
+        assertThat(commands.getObject(0).getString("text")).isEqualTo("/gamemode creative");
+        assertThat(commands.getObject(1).getLong("at")).isEqualTo(NOW + 2_000);
+        assertThat(recap.getInt("commandsOmitted")).isEqualTo(2);
+        assertThat(recap.getArray("actions").getObject(0).getString("text")).isEqualTo("banned Bob — x-ray");
+        assertThat(recap.getObject("placed").getInt("STONE")).isEqualTo(3);
+        assertThat(recap.getObject("broken").keys()).isEmpty();
+        assertThat(recap.getInt("teleports")).isEqualTo(1);
+        assertThat(recap.getArray("worlds").getString(0)).isEqualTo("world_nether");
+        assertThat(recap.getArray("gamemodes").getString(0)).isEqualTo("SURVIVAL → CREATIVE");
+    }
+
+    @Test
+    @DisplayName("without a recap the leave event is what it always was")
+    void adminWithoutRecap() {
+        assertThat(left(null).hasKey("recap")).isFalse();
+    }
+
+    @Test
+    @DisplayName("a huge recap is cut to fit one request to Hush; what is cut is counted as omitted")
+    void adminRecapFits() {
+        List<de.raindancer.core.moderation.feed.AdminSessionRecap.Line> many = new java.util.ArrayList<>();
+        for (int i = 0; i < 500; i++) {
+            many.add(new de.raindancer.core.moderation.feed.AdminSessionRecap.Line(NOW + i, "/say " + "x".repeat(250)));
+        }
+
+        DataObject event = left(recap(many));
+
+        assertThat(event.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8).length)
+                .isLessThan(HushEvents.RECAP_BUDGET + 2_000);
+        DataObject recap = event.getObject("recap");
+        int kept = recap.getArray("commands").length();
+        assertThat(kept).isBetween(50, 499);
+        assertThat(recap.getInt("commandsOmitted")).isEqualTo(500 - kept + 2);
+    }
 }

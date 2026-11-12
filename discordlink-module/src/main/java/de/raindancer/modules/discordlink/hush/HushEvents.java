@@ -18,6 +18,13 @@ import java.util.function.Function;
 public final class HushEvents {
 
     public static final int VERBOSE_MAX = 300;
+    /**
+     * About how many bytes of JSON one admin recap may take: a request to Hush is at most 64 KiB, and the recap rides
+     * in a batch with other events. Lines past it are counted as omitted.
+     */
+    public static final int RECAP_BUDGET = 40_000;
+    /** The JSON around each line ({"at":…,"text":""}) and escapes, roughly. */
+    private static final int LINE_OVERHEAD = 40;
     private static final int TEXT_MAX = 500;
 
     private HushEvents() {
@@ -89,7 +96,61 @@ public final class HushEvents {
         if (!notice.entered() && notice.durationMillis() > 0) {
             event.put("duration", notice.durationMillis());
         }
+        if (!notice.entered() && notice.recap() != null) {
+            event.put("recap", recap(notice.recap()));
+        }
         return event;
+    }
+
+    /** Commands get the bigger share of the budget; what actions leave unused is not handed back. */
+    private static DataObject recap(de.raindancer.core.moderation.feed.AdminSessionRecap recap) {
+        int[] budget = {RECAP_BUDGET - 2_000};
+        DataObject out = DataObject.empty().put("start", recap.startedAt()).put("end", recap.endedAt());
+        DataArray commands = lines(recap.commands(), budget, budget[0] * 3 / 5);
+        out.put("commands", commands).put("commandsOmitted", recap.commandsOmitted() + recap.commands().size() - commands.length());
+        DataArray actions = lines(recap.actions(), budget, budget[0]);
+        out.put("actions", actions).put("actionsOmitted", recap.actionsOmitted() + recap.actions().size() - actions.length());
+        out.put("placed", counts(recap.placed())).put("broken", counts(recap.broken()))
+                .put("teleports", recap.teleports());
+        DataArray worlds = DataArray.empty();
+        recap.worlds().stream().limit(20).forEach(world -> worlds.add(cut(world, 64)));
+        DataArray modes = DataArray.empty();
+        recap.gameModes().stream().limit(20).forEach(modes::add);
+        return out.put("worlds", worlds).put("gamemodes", modes);
+    }
+
+    private static DataArray lines(List<de.raindancer.core.moderation.feed.AdminSessionRecap.Line> lines, int[] budget, int share) {
+        DataArray array = DataArray.empty();
+        int spent = 0;
+        for (var line : lines) {
+            int cost = line.text().getBytes(java.nio.charset.StandardCharsets.UTF_8).length + LINE_OVERHEAD;
+            if (spent + cost > share) {
+                break;
+            }
+            spent += cost;
+            array.add(DataObject.empty().put("at", line.at()).put("text", line.text()));
+        }
+        budget[0] -= spent;
+        return array;
+    }
+
+    /** At most 50 kinds, the most first; the rest summed up under "OTHER". */
+    private static DataObject counts(java.util.Map<String, Integer> counts) {
+        DataObject out = DataObject.empty();
+        var sorted = counts.entrySet().stream()
+                .sorted(java.util.Map.Entry.<String, Integer>comparingByValue().reversed()).toList();
+        int other = 0;
+        for (int i = 0; i < sorted.size(); i++) {
+            if (i < 50) {
+                out.put(cut(sorted.get(i).getKey(), 64), sorted.get(i).getValue());
+            } else {
+                other += sorted.get(i).getValue();
+            }
+        }
+        if (other > 0) {
+            out.put("OTHER", other);
+        }
+        return out;
     }
 
     /** The answer to an action Hush sent (protocol v2): {@code ref} is the action's id. */
