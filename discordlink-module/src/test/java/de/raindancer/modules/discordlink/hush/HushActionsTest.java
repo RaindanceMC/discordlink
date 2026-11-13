@@ -361,4 +361,49 @@ class HushActionsTest {
         assertThat(answers.get(1).getBoolean("ok")).isFalse();
         assertThat(answers.get(1).getString("outcome")).isEqualTo("not_linked");
     }
+    @Test
+    @DisplayName("punish: a Discord ban or unban reaches the linked account through the server's own bans, and only that account")
+    void punishOnlyTheLinkedAccount() {
+        links.adopt(ALEX, "Alex", "111");
+        List<String> asked = new ArrayList<>();
+        HushActions withBans = new HushActions(links, null, () -> groups, new RoleSyncRule(), (type, build) -> {
+            answerTypes.add(type);
+            answers.add(build.get());
+        }, now::get, Runnable::run, watcher, resolver, notes, (kind, id, approve, by, reason) -> "not_here",
+                (kind, player, name, link, options) -> new HushActions.Taken("not_here", "", ""),
+                (ban, player, name, by, reason) -> {
+                    asked.add((ban ? "ban " : "unban ") + player + " " + name + " " + by + " " + reason);
+                    return ban ? "banned" : "already";
+                });
+
+        withBans.handle(action("p1", "punish").put("action", "ban").put("player", ALEX.toString()).put("name", "Alex")
+                .put("discord", "111").put("reason", "Banned on Discord by Mod: raid").put("by", "Hush"));
+        withBans.handle(action("p2", "punish").put("action", "unban").put("player", ALEX.toString()).put("name", "Alex")
+                .put("discord", "111").put("reason", "appeal").put("by", "Hush"));
+        withBans.handle(action("p3", "punish").put("action", "ban").put("player", ALEX.toString()).put("name", "Alex")
+                .put("discord", "222").put("reason", "not theirs").put("by", "Hush"));
+        withBans.handle(action("p4", "punish").put("action", "ban").put("player", "no-uuid").put("discord", "111"));
+        withBans.handle(action("p5", "punish").put("action", "kick").put("player", ALEX.toString()).put("discord", "111"));
+
+        assertThat(asked).containsExactly("ban " + ALEX + " Alex Hush Banned on Discord by Mod: raid",
+                "unban " + ALEX + " Alex Hush appeal");
+        assertThat(answers.get(0).getBoolean("ok")).isTrue();
+        assertThat(answers.get(0).getString("outcome")).isEqualTo("banned");
+        assertThat(answers.get(1).getBoolean("ok")).isTrue();
+        assertThat(answers.get(1).getString("outcome")).isEqualTo("already");
+        assertThat(answers.get(2).getBoolean("ok")).isFalse();
+        assertThat(answers.get(2).getString("outcome")).isEqualTo("not_linked");
+        assertThat(answers.get(3).getString("outcome")).isEqualTo("unknown_player");
+        assertThat(answers.get(4).getString("outcome")).isEqualTo("bad_punish");
+    }
+
+    @Test
+    @DisplayName("punish: a server whose moderation does not take bans from Discord says it failed")
+    void punishWithoutBans() {
+        links.adopt(ALEX, "Alex", "111");
+        actions.handle(action("p1", "punish").put("action", "ban").put("player", ALEX.toString()).put("name", "Alex")
+                .put("discord", "111").put("by", "Hush"));
+        assertThat(answers.get(0).getBoolean("ok")).isFalse();
+        assertThat(answers.get(0).getString("outcome")).isEqualTo("failed");
+    }
 }

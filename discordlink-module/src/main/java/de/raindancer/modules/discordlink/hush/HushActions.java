@@ -27,7 +27,7 @@ import java.util.function.Supplier;
 
 /**
  * What Hush asks of this server (protocol v2, see Hush's docs/MINECRAFT.md): redeem a link code, unlink, set a
- * player's groups, list the links, build a player card. Every action is answered with a {@code result} event whose
+ * player's groups, list the links, build a player card, ban or unban a linked account. Every action is answered with a {@code result} event whose
  * {@code ref} is the action's id. An id seen twice (Hush asks again when an answer got lost) is answered again from
  * memory, never done twice.
  *
@@ -52,6 +52,7 @@ public final class HushActions {
     private final Map<String, DataObject> answered = new LinkedHashMap<>();
     private final Reviews reviews;
     private final Submissions submissions;
+    private final Bans bans;
 
     /** Core's staff reviews: approve or refuse a request of a kind. @return the outcome, lower case */
     @FunctionalInterface
@@ -69,6 +70,16 @@ public final class HushActions {
         Taken submit(String kind, UUID player, String name, String link, String options);
     }
 
+    /**
+     * The server's own bans, for a ban or unban mirrored from Discord (Core's ExternalBans).
+     *
+     * @return {@code banned}, {@code unbanned}, {@code already} or {@code failed}
+     */
+    @FunctionalInterface
+    public interface Bans {
+        String apply(boolean ban, UUID player, String name, String by, String reason);
+    }
+
     public HushActions(LinkService links, InfoService info, Supplier<PermissionGroups> groups, RoleSyncRule rule,
                        BiConsumer<String, Supplier<DataObject>> answer, LongSupplier clock, Executor async,
                        HushGroupWatcher watcher, PlayerResolver resolver, LinkNotes notes) {
@@ -83,13 +94,22 @@ public final class HushActions {
                 (kind, player, name, link, options) -> new Taken("not_here", "", "This server does not take that."));
     }
 
-    /** @param answer {@link HushFeed#offerNow}: somebody is waiting for these */
     public HushActions(LinkService links, InfoService info, Supplier<PermissionGroups> groups, RoleSyncRule rule,
                        BiConsumer<String, Supplier<DataObject>> answer, LongSupplier clock, Executor async,
                        HushGroupWatcher watcher, PlayerResolver resolver, LinkNotes notes, Reviews reviews,
                        Submissions submissions) {
+        this(links, info, groups, rule, answer, clock, async, watcher, resolver, notes, reviews, submissions,
+                (ban, player, name, by, reason) -> "failed");
+    }
+
+    /** @param answer {@link HushFeed#offerNow}: somebody is waiting for these */
+    public HushActions(LinkService links, InfoService info, Supplier<PermissionGroups> groups, RoleSyncRule rule,
+                       BiConsumer<String, Supplier<DataObject>> answer, LongSupplier clock, Executor async,
+                       HushGroupWatcher watcher, PlayerResolver resolver, LinkNotes notes, Reviews reviews,
+                       Submissions submissions, Bans bans) {
         this.reviews = reviews;
         this.submissions = submissions;
+        this.bans = bans;
         this.links = links;
         this.info = info;
         this.groups = groups;
@@ -146,6 +166,7 @@ public final class HushActions {
             case "player" -> player(id, action.getString("name", ""));
             case "review" -> review(id, action);
             case "review_submit" -> submit(id, action);
+            case "punish" -> punish(id, action);
             default -> HushEvents.result(clock.getAsLong(), id, false, "unknown_action", null);
         };
     }
@@ -311,6 +332,36 @@ public final class HushActions {
             data.put("ref", taken.ref());
         }
         return HushEvents.result(clock.getAsLong(), id, taken.outcome().equals("asked"), taken.outcome(), data);
+    }
+
+    /**
+     * Ban sync Discord → game: a ban or unban on Discord done to the linked account with this server's own bans.
+     * Only for an account linked to that very Discord user, like {@link #submit}. What the ban reports back as a
+     * punishment is Hush's own echo, which Hush recognises and drops.
+     */
+    private DataObject punish(String id, DataObject action) {
+        String what = action.getString("action", "");
+        if (!(what.equals("ban") || what.equals("unban"))) {
+            return HushEvents.result(clock.getAsLong(), id, false, "bad_punish", null);
+        }
+        UUID player;
+        try {
+            player = UUID.fromString(action.getString("player", ""));
+        } catch (IllegalArgumentException notAnId) {
+            return HushEvents.result(clock.getAsLong(), id, false, "unknown_player", null);
+        }
+        String discord = action.getString("discord", "");
+        Optional<Link> linked = links.linkOf(player);
+        if (discord.isBlank() || linked.isEmpty() || !linked.get().discord().equals(discord)) {
+            return HushEvents.result(clock.getAsLong(), id, false, "not_linked", null);
+        }
+        String name = action.getString("name", "");
+        String outcome = bans.apply(what.equals("ban"), player, name.isBlank() ? linked.get().name() : name,
+                action.getString("by", "Hush"), action.getString("reason", ""));
+        boolean ok = outcome.equals("banned") || outcome.equals("unbanned") || outcome.equals("already");
+        return HushEvents.result(clock.getAsLong(), id, ok, outcome,
+                DataObject.empty().put("player", DataObject.empty().put("name", linked.get().name())
+                        .put("uuid", player.toString())));
     }
 
     static DataObject cardData(PlayerCard c) {

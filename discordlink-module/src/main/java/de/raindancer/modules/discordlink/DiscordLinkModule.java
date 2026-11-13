@@ -47,7 +47,7 @@ import java.util.List;
  */
 public final class DiscordLinkModule implements FlexModule {
 
-    private static final ModuleInfo INFO = ModuleInfo.of("discordlink", "Discord Link", "0.15.0")
+    private static final ModuleInfo INFO = ModuleInfo.of("discordlink", "Discord Link", "0.16.0")
             .describedAs("Whitelisting and account links through Discord's /link; Discord roles give LuckPerms groups")
             .by("Raindancer118");
 
@@ -206,7 +206,7 @@ public final class DiscordLinkModule implements FlexModule {
             }
             HushActions actions = new HushActions(links, info, () -> context.core().groups(), new RoleSyncRule(),
                     hushFeed::offerNow, System::currentTimeMillis, work -> Scheduling.async(context.plugin(), work), hushGroups,
-                    resolver, notes, decide, submit);
+                    resolver, notes, decide, submit, bans(context));
             hushFeed.actions(actions::handle);
             links.onChange((link, linked) -> {
                 long at = System.currentTimeMillis();
@@ -245,6 +245,27 @@ public final class DiscordLinkModule implements FlexModule {
     @Override
     public List<ModuleCommand> commands() {
         return DiscordLinkCommands.declared();
+    }
+
+    /** Core 2.96.0 takes bans from Discord (moderation 3.27.0 hands them out); before that they fail. */
+    private static HushActions.Bans bans(ModuleContext context) {
+        try {
+            Class.forName("de.raindancer.core.moderation.punishment.ExternalBans", false,
+                    de.raindancer.core.moderation.review.StaffReviews.class.getClassLoader());
+        } catch (ClassNotFoundException | LinkageError olderCore) {
+            context.log().info("RainsCore is older than 2.96.0: bans from Discord are not mirrored here.");
+            return (ban, player, name, by, reason) -> "failed";
+        }
+        return (ban, player, name, by, reason) -> {
+            de.raindancer.core.moderation.punishment.ExternalBans.Outcome outcome = ban
+                    ? de.raindancer.core.moderation.punishment.ExternalBans.ban(player, name, by, reason)
+                    : de.raindancer.core.moderation.punishment.ExternalBans.unban(player, name, by, reason);
+            return switch (outcome) {
+                case DONE -> ban ? "banned" : "unbanned";
+                case ALREADY -> "already";
+                case NOBODY, FAILED -> "failed";
+            };
+        };
     }
 
     /** Core 2.95.0 has the intake; on 2.94.0 a request from Discord is answered "not here". */
