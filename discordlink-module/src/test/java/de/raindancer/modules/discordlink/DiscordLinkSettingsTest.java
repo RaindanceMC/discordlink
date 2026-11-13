@@ -18,7 +18,7 @@ class DiscordLinkSettingsTest {
         DiscordLinkSettings d = DiscordLinkSettings.DEFAULTS;
         return new DiscordLinkSettings(d.enabled(), guild, d.joinCodes(), d.codeMinutes(), d.syncMinutes(), more,
                 STAFF, d.lookupUrl(), d.hushUrl(), d.hushServerName(), d.hushAnticheat(), d.hushPunishments(),
-                d.hushReports(), d.hushServer(), d.hushAdminMode(), d.hushActions(), d.hushPollSeconds(), d.discordName(), d.networkName(), d.accent());
+                d.hushReports(), d.hushServer(), d.hushAdminMode(), d.hushActions(), d.hushPollSeconds(), d.hushReviews(), d.discordName(), d.networkName(), d.accent());
     }
 
     @Test
@@ -68,14 +68,14 @@ class DiscordLinkSettingsTest {
         DiscordLinkSettings d = DiscordLinkSettings.DEFAULTS;
         DiscordLinkSettings hyades = new DiscordLinkSettings(d.enabled(), d.guildId(), d.joinCodes(), d.codeMinutes(), d.syncMinutes(),
                 d.moreLinkGuildIds(), d.lookupGuildId(), d.lookupUrl(), d.hushUrl(), d.hushServerName(), d.hushAnticheat(),
-                d.hushPunishments(), d.hushReports(), d.hushServer(), d.hushAdminMode(), d.hushActions(), d.hushPollSeconds(),
+                d.hushPunishments(), d.hushReports(), d.hushServer(), d.hushAdminMode(), d.hushActions(), d.hushPollSeconds(), d.hushReviews(),
                 "the <#6EC1EA>hyadesmc.net</#6EC1EA> Discord", "<#6EC1EA>Hyades</#6EC1EA>", "#6EC1EA");
         assertEquals("Hyades", hyades.plainNetwork());
         assertEquals("the <#6EC1EA>hyadesmc.net</#6EC1EA> Discord", hyades.wording()[1].toString());
         assertEquals("#6EC1EA", hyades.wording()[3].toString());
         DiscordLinkSettings blank = new DiscordLinkSettings(d.enabled(), d.guildId(), d.joinCodes(), d.codeMinutes(), d.syncMinutes(),
                 d.moreLinkGuildIds(), d.lookupGuildId(), d.lookupUrl(), d.hushUrl(), d.hushServerName(), d.hushAnticheat(),
-                d.hushPunishments(), d.hushReports(), d.hushServer(), d.hushAdminMode(), d.hushActions(), d.hushPollSeconds(), " ", null, "");
+                d.hushPunishments(), d.hushReports(), d.hushServer(), d.hushAdminMode(), d.hushActions(), d.hushPollSeconds(), d.hushReviews(), " ", null, "");
         assertEquals("Lilly's network", blank.plainNetwork());
         assertEquals("light_purple", blank.wording()[3].toString());
     }
@@ -87,7 +87,7 @@ class DiscordLinkSettingsTest {
         DiscordLinkSettings d = DiscordLinkSettings.DEFAULTS;
         DiscordLinkSettings hyades = new DiscordLinkSettings(d.enabled(), d.guildId(), d.joinCodes(), d.codeMinutes(), d.syncMinutes(),
                 d.moreLinkGuildIds(), d.lookupGuildId(), d.lookupUrl(), d.hushUrl(), d.hushServerName(), d.hushAnticheat(),
-                d.hushPunishments(), d.hushReports(), d.hushServer(), d.hushAdminMode(), d.hushActions(), d.hushPollSeconds(),
+                d.hushPunishments(), d.hushReports(), d.hushServer(), d.hushAdminMode(), d.hushActions(), d.hushPollSeconds(), d.hushReviews(),
                 "the <#6EC1EA>hyadesmc.net</#6EC1EA> Discord", "Hyades", "#6EC1EA");
         var mini = net.kyori.adventure.text.minimessage.MiniMessage.miniMessage();
         var plain = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText();

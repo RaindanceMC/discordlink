@@ -52,7 +52,7 @@ public final class HushControl {
         String name = now.hushServerName() == null ? "" : now.hushServerName().strip();
         return new HushConfig(now.hushUrl(), name.isEmpty() ? networkId.get() : name, token(),
                 now.hushAnticheat(), now.hushPunishments(), now.hushReports(), now.hushServer(),
-                now.hushAdminMode(), now.hushActions(), now.hushPollSeconds());
+                now.hushAdminMode(), now.hushActions(), now.hushPollSeconds(), now.hushReviews());
     }
 
     private HushToken token() {

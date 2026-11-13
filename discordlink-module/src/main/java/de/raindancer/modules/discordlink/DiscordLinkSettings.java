@@ -104,6 +104,12 @@ public record DiscordLinkSettings(
         @Key("hush.poll-seconds")
         int hushPollSeconds,
 
+        @In("discordlink") @Title("Hush: requests for staff")
+        @Describe("Requests waiting for staff, like Prime map art, go to Discord with a picture and Approve and Deny "
+                + "buttons. Needs the actions from Discord.")
+        @Key("hush.reviews")
+        boolean hushReviews,
+
         @In("discordlink") @Title("Wording: the Discord server")
         @Describe("How in-game messages call the Discord server, MiniMessage allowed: \"Type /link CODE in <discord>\".")
         @Key("discord-name")
@@ -122,7 +128,7 @@ public record DiscordLinkSettings(
     public static final String HUSH_URL = "https://hush.raindancer118.de/api/minecraft/events";
 
     public static final DiscordLinkSettings DEFAULTS = new DiscordLinkSettings(true, "", true, 30, 30, "", "",
-            "https://applications.lillyyxoxo.net", HUSH_URL, "", true, true, true, true, true, true, 3,
+            "https://applications.lillyyxoxo.net", HUSH_URL, "", true, true, true, true, true, true, 3, true,
             "<#5865F2>Lilly's Discord</#5865F2>", "Lilly's network", "light_purple");
 
     /** Placeholders for the messages that name the Discord server and the network. */

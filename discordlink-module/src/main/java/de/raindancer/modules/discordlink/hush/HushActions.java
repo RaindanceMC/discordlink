@@ -50,11 +50,26 @@ public final class HushActions {
     private final LinkNotes notes;
 
     private final Map<String, DataObject> answered = new LinkedHashMap<>();
+    private final Reviews reviews;
+
+    /** Core's staff reviews: approve or refuse a request of a kind. @return the outcome, lower case */
+    @FunctionalInterface
+    public interface Reviews {
+        String decide(String kind, String id, boolean approve, String by, String reason);
+    }
+
+    public HushActions(LinkService links, InfoService info, Supplier<PermissionGroups> groups, RoleSyncRule rule,
+                       BiConsumer<String, Supplier<DataObject>> answer, LongSupplier clock, Executor async,
+                       HushGroupWatcher watcher, PlayerResolver resolver, LinkNotes notes) {
+        this(links, info, groups, rule, answer, clock, async, watcher, resolver, notes,
+                (kind, id, approve, by, reason) -> "not_here");
+    }
 
     /** @param answer {@link HushFeed#offerNow}: somebody is waiting for these */
     public HushActions(LinkService links, InfoService info, Supplier<PermissionGroups> groups, RoleSyncRule rule,
                        BiConsumer<String, Supplier<DataObject>> answer, LongSupplier clock, Executor async,
-                       HushGroupWatcher watcher, PlayerResolver resolver, LinkNotes notes) {
+                       HushGroupWatcher watcher, PlayerResolver resolver, LinkNotes notes, Reviews reviews) {
+        this.reviews = reviews;
         this.links = links;
         this.info = info;
         this.groups = groups;
@@ -109,6 +124,7 @@ public final class HushActions {
             case "set_groups" -> setGroups(id, action);
             case "sync_links" -> syncLinks(id);
             case "player" -> player(id, action.getString("name", ""));
+            case "review" -> review(id, action);
             default -> HushEvents.result(clock.getAsLong(), id, false, "unknown_action", null);
         };
     }
@@ -231,6 +247,21 @@ public final class HushActions {
             return HushEvents.result(clock.getAsLong(), id, false, "unknown_player", null);
         }
         return HushEvents.result(clock.getAsLong(), id, true, "card", cardData(card.get()));
+    }
+
+    /** Approve or refuse something waiting for staff; what follows comes as review events from the module. */
+    private DataObject review(String id, DataObject action) {
+        String kind = action.getString("kind", "");
+        String what = action.getString("ref", "");
+        String decision = action.getString("decision", "");
+        if (kind.isBlank() || what.isBlank() || !(decision.equals("approve") || decision.equals("refuse"))) {
+            return HushEvents.result(clock.getAsLong(), id, false, "bad_review", null);
+        }
+        String outcome = reviews.decide(kind, what, decision.equals("approve"), action.getString("by", ""),
+                action.getString("reason", ""));
+        boolean ok = outcome.equals("approved") || outcome.equals("refused");
+        return HushEvents.result(clock.getAsLong(), id, ok, outcome,
+                DataObject.empty().put("kind", kind).put("ref", what));
     }
 
     static DataObject cardData(PlayerCard c) {

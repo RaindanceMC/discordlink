@@ -154,6 +154,35 @@ public final class HushEvents {
     }
 
     /** The answer to an action Hush sent (protocol v2): {@code ref} is the action's id. */
+    /** Hush's cap on a preview picture, before base64. */
+    public static final int PREVIEW_MAX = 40 * 1024;
+
+    /** Something waiting for staff (map art …), or what became of it; Hush shows it with Approve and Deny. */
+    public static DataObject review(long at, de.raindancer.core.moderation.review.StaffReviews.Review review) {
+        DataObject event = DataObject.empty().put("type", "review").put("at", at)
+                .put("kind", cut(review.kind(), 32)).put("id", cut(review.id(), 64))
+                .put("player", who(review.name(), review.player()))
+                .put("title", cut(review.title(), 200))
+                .put("state", review.state().name().toLowerCase(java.util.Locale.ROOT));
+        if (!review.link().isBlank()) {
+            event.put("link", cut(review.link(), 1000));
+        }
+        if (!review.detail().isBlank()) {
+            event.put("detail", cut(review.detail(), TEXT_MAX));
+        }
+        if (!review.by().isBlank()) {
+            event.put("by", cut(review.by(), 64));
+        }
+        if (!review.reason().isBlank()) {
+            event.put("reason", cut(review.reason(), TEXT_MAX));
+        }
+        if (review.preview().length > 0 && review.preview().length <= PREVIEW_MAX) {
+            event.put("preview", java.util.Base64.getEncoder().encodeToString(review.preview()))
+                    .put("previewType", review.previewType().isBlank() ? "image/jpeg" : review.previewType());
+        }
+        return event;
+    }
+
     public static DataObject result(long at, String ref, boolean ok, String outcome, DataObject data) {
         DataObject event = DataObject.empty().put("type", "result").put("at", at).put("ref", cut(ref, 64))
                 .put("ok", ok).put("outcome", cut(outcome, 64));

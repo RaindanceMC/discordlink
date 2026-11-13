@@ -33,7 +33,7 @@
         <!-- 0.4.0: /status is a network status board (every server up or down, TPS, tick time, uptime), /player shows balance, guild, job and achievements. Needs RainsCore with NetworkServers.known. 0.3.0: /status has a Refresh button and shows when it was taken; /lookup on one staff server only (lookup-guild-id): the applications website's lookup (key: /discordlink lookupkey) plus the server's own stats and who the account is linked to. -->
         <!-- 0.10.0: the Minecraft feed for the Discord bot Hush (anti-cheat alerts, punishments, reports, server start/stop; hush.* settings, /discordlink hushtoken, /discordlink hush status). Needs RainsCore 2.71.0 and Moderation 3.20.0 for the first three. -->
         <!-- 0.12.1: /player shows the worn rank title, staff linking resolves names through Core's ProfileLookup. -->
-        <plugin.version>0.13.0</plugin.version>
+        <plugin.version>0.14.0</plugin.version>
     </properties>
 
     <dependencies>

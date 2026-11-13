@@ -47,7 +47,7 @@ import java.util.List;
  */
 public final class DiscordLinkModule implements FlexModule {
 
-    private static final ModuleInfo INFO = ModuleInfo.of("discordlink", "Discord Link", "0.13.0")
+    private static final ModuleInfo INFO = ModuleInfo.of("discordlink", "Discord Link", "0.14.0")
             .describedAs("Whitelisting and account links through Discord's /link; Discord roles give LuckPerms groups")
             .by("Raindancer118");
 
@@ -190,8 +190,19 @@ public final class DiscordLinkModule implements FlexModule {
                                   LinkNotes notes) {
         try {
             hushGroups = new HushGroupWatcher(links, () -> context.core().groups(), hushFeed::offer, System::currentTimeMillis);
+            HushActions.Reviews decide;
+            try {
+                de.raindancer.core.moderation.review.StaffReviews staff = context.core().staffReviews();
+                context.closeWith(HushHooks.reviews(staff, hushFeed::offerNow, System::currentTimeMillis));
+                decide = (kind, id, approve, by, reason) -> staff.decide(kind, id, approve, by, reason).name()
+                        .toLowerCase(java.util.Locale.ROOT);
+            } catch (LinkageError olderCore) {
+                context.log().info("RainsCore is older than 2.94.0: no requests for staff (map art) on Discord.");
+                decide = (kind, id, approve, by, reason) -> "not_here";
+            }
             HushActions actions = new HushActions(links, info, () -> context.core().groups(), new RoleSyncRule(),
-                    hushFeed::offerNow, System::currentTimeMillis, work -> Scheduling.async(context.plugin(), work), hushGroups, resolver, notes);
+                    hushFeed::offerNow, System::currentTimeMillis, work -> Scheduling.async(context.plugin(), work), hushGroups,
+                    resolver, notes, decide);
             hushFeed.actions(actions::handle);
             links.onChange((link, linked) -> {
                 long at = System.currentTimeMillis();

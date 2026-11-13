@@ -44,6 +44,16 @@ public final class HushHooks implements AutoCloseable {
                 }));
     }
 
+    /** Requests waiting for staff (Core 2.94.0): each state goes at once, somebody is looking at the card. */
+    public static de.raindancer.core.moderation.review.StaffReviews.Subscription reviews(
+            de.raindancer.core.moderation.review.StaffReviews reviews, BiConsumer<String, Supplier<DataObject>> sink,
+            LongSupplier clock) {
+        return reviews.onReview(review -> {
+            long at = clock.getAsLong();
+            sink.accept("review", () -> HushEvents.review(at, review));
+        });
+    }
+
     @Override
     public void close() {
         for (ModerationFeed.Subscription subscription : subscriptions) {
