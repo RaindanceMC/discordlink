@@ -334,4 +334,31 @@ class HushActionsTest {
         assertThat(notes.take(ALEX)).contains("Goomy");
         assertThat(answers.get(1).getString("outcome")).isEqualTo("not_linked");
     }
+
+    @Test
+    @DisplayName("review_submit: a picture from Discord is taken only for the account linked to that very user")
+    void submitOnlyForOwnLink() {
+        links.adopt(ALEX, "Alex", "111");
+        List<String> taken = new ArrayList<>();
+        HushActions withIntake = new HushActions(links, null, () -> groups, new RoleSyncRule(), (type, build) -> {
+            answerTypes.add(type);
+            answers.add(build.get());
+        }, now::get, Runnable::run, watcher, resolver, notes, (kind, id, approve, by, reason) -> "not_here",
+                (kind, player, name, link, options) -> {
+                    taken.add(kind + " " + name + " " + link + " " + options);
+                    return new HushActions.Taken("asked", "k3x9q", "Asked!");
+                });
+
+        withIntake.handle(action("s1", "review_submit").put("kind", "mapart").put("discord", "111")
+                .put("player", ALEX.toString()).put("link", "https://cdn.example/a.png").put("options", "2x2"));
+        withIntake.handle(action("s2", "review_submit").put("kind", "mapart").put("discord", "222")
+                .put("player", ALEX.toString()).put("link", "https://cdn.example/a.png").put("options", "2x2"));
+
+        assertThat(taken).containsExactly("mapart Alex https://cdn.example/a.png 2x2");
+        assertThat(answers.get(0).getBoolean("ok")).isTrue();
+        assertThat(answers.get(0).getObject("data").getString("ref")).isEqualTo("k3x9q");
+        assertThat(answers.get(0).getObject("data").getString("text")).isEqualTo("Asked!");
+        assertThat(answers.get(1).getBoolean("ok")).isFalse();
+        assertThat(answers.get(1).getString("outcome")).isEqualTo("not_linked");
+    }
 }

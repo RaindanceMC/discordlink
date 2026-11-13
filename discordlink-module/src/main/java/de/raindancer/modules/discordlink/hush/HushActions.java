@@ -51,11 +51,22 @@ public final class HushActions {
 
     private final Map<String, DataObject> answered = new LinkedHashMap<>();
     private final Reviews reviews;
+    private final Submissions submissions;
 
     /** Core's staff reviews: approve or refuse a request of a kind. @return the outcome, lower case */
     @FunctionalInterface
     public interface Reviews {
         String decide(String kind, String id, boolean approve, String by, String reason);
+    }
+
+    /** What Core's intake said to a request sent from Discord. */
+    public record Taken(String outcome, String ref, String text) {
+    }
+
+    /** Core's staff reviews: a request (map art …) sent from Discord for a linked account. */
+    @FunctionalInterface
+    public interface Submissions {
+        Taken submit(String kind, UUID player, String name, String link, String options);
     }
 
     public HushActions(LinkService links, InfoService info, Supplier<PermissionGroups> groups, RoleSyncRule rule,
@@ -65,11 +76,20 @@ public final class HushActions {
                 (kind, id, approve, by, reason) -> "not_here");
     }
 
-    /** @param answer {@link HushFeed#offerNow}: somebody is waiting for these */
     public HushActions(LinkService links, InfoService info, Supplier<PermissionGroups> groups, RoleSyncRule rule,
                        BiConsumer<String, Supplier<DataObject>> answer, LongSupplier clock, Executor async,
                        HushGroupWatcher watcher, PlayerResolver resolver, LinkNotes notes, Reviews reviews) {
+        this(links, info, groups, rule, answer, clock, async, watcher, resolver, notes, reviews,
+                (kind, player, name, link, options) -> new Taken("not_here", "", "This server does not take that."));
+    }
+
+    /** @param answer {@link HushFeed#offerNow}: somebody is waiting for these */
+    public HushActions(LinkService links, InfoService info, Supplier<PermissionGroups> groups, RoleSyncRule rule,
+                       BiConsumer<String, Supplier<DataObject>> answer, LongSupplier clock, Executor async,
+                       HushGroupWatcher watcher, PlayerResolver resolver, LinkNotes notes, Reviews reviews,
+                       Submissions submissions) {
         this.reviews = reviews;
+        this.submissions = submissions;
         this.links = links;
         this.info = info;
         this.groups = groups;
@@ -125,6 +145,7 @@ public final class HushActions {
             case "sync_links" -> syncLinks(id);
             case "player" -> player(id, action.getString("name", ""));
             case "review" -> review(id, action);
+            case "review_submit" -> submit(id, action);
             default -> HushEvents.result(clock.getAsLong(), id, false, "unknown_action", null);
         };
     }
@@ -262,6 +283,34 @@ public final class HushActions {
         boolean ok = outcome.equals("approved") || outcome.equals("refused");
         return HushEvents.result(clock.getAsLong(), id, ok, outcome,
                 DataObject.empty().put("kind", kind).put("ref", what));
+    }
+
+    /**
+     * A request sent from Discord (an uploaded picture for map art). Only for an account linked to that very Discord
+     * user: Hush names the account, this side checks it.
+     */
+    private DataObject submit(String id, DataObject action) {
+        String kind = action.getString("kind", "");
+        String discord = action.getString("discord", "");
+        String link = action.getString("link", "");
+        UUID player;
+        try {
+            player = UUID.fromString(action.getString("player", ""));
+        } catch (IllegalArgumentException notAnId) {
+            return HushEvents.result(clock.getAsLong(), id, false, "bad_player", null);
+        }
+        Optional<Link> linked = links.linkOf(player);
+        if (kind.isBlank() || link.isBlank() || discord.isBlank() || linked.isEmpty()
+                || !linked.get().discord().equals(discord)) {
+            return HushEvents.result(clock.getAsLong(), id, false, "not_linked", DataObject.empty()
+                    .put("text", "Link your Minecraft account first with /link."));
+        }
+        Taken taken = submissions.submit(kind, player, linked.get().name(), link, action.getString("options", ""));
+        DataObject data = DataObject.empty().put("kind", kind).put("text", taken.text());
+        if (!taken.ref().isBlank()) {
+            data.put("ref", taken.ref());
+        }
+        return HushEvents.result(clock.getAsLong(), id, taken.outcome().equals("asked"), taken.outcome(), data);
     }
 
     static DataObject cardData(PlayerCard c) {

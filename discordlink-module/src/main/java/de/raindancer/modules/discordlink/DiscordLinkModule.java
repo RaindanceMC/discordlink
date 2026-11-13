@@ -47,7 +47,7 @@ import java.util.List;
  */
 public final class DiscordLinkModule implements FlexModule {
 
-    private static final ModuleInfo INFO = ModuleInfo.of("discordlink", "Discord Link", "0.14.0")
+    private static final ModuleInfo INFO = ModuleInfo.of("discordlink", "Discord Link", "0.15.0")
             .describedAs("Whitelisting and account links through Discord's /link; Discord roles give LuckPerms groups")
             .by("Raindancer118");
 
@@ -191,18 +191,22 @@ public final class DiscordLinkModule implements FlexModule {
         try {
             hushGroups = new HushGroupWatcher(links, () -> context.core().groups(), hushFeed::offer, System::currentTimeMillis);
             HushActions.Reviews decide;
+            HushActions.Submissions submit;
             try {
                 de.raindancer.core.moderation.review.StaffReviews staff = context.core().staffReviews();
                 context.closeWith(HushHooks.reviews(staff, hushFeed::offerNow, System::currentTimeMillis));
                 decide = (kind, id, approve, by, reason) -> staff.decide(kind, id, approve, by, reason).name()
                         .toLowerCase(java.util.Locale.ROOT);
+                submit = submitter(staff);
             } catch (LinkageError olderCore) {
                 context.log().info("RainsCore is older than 2.94.0: no requests for staff (map art) on Discord.");
                 decide = (kind, id, approve, by, reason) -> "not_here";
+                submit = (kind, player, name, link, options) -> new HushActions.Taken("not_here", "",
+                        "This server does not take that.");
             }
             HushActions actions = new HushActions(links, info, () -> context.core().groups(), new RoleSyncRule(),
                     hushFeed::offerNow, System::currentTimeMillis, work -> Scheduling.async(context.plugin(), work), hushGroups,
-                    resolver, notes, decide);
+                    resolver, notes, decide, submit);
             hushFeed.actions(actions::handle);
             links.onChange((link, linked) -> {
                 long at = System.currentTimeMillis();
@@ -241,5 +245,21 @@ public final class DiscordLinkModule implements FlexModule {
     @Override
     public List<ModuleCommand> commands() {
         return DiscordLinkCommands.declared();
+    }
+
+    /** Core 2.95.0 has the intake; on 2.94.0 a request from Discord is answered "not here". */
+    private static HushActions.Submissions submitter(de.raindancer.core.moderation.review.StaffReviews staff) {
+        try {
+            staff.getClass().getMethod("submit", de.raindancer.core.moderation.review.StaffReviews.Submission.class);
+        } catch (NoSuchMethodException | LinkageError older) {
+            return (kind, player, name, link, options) -> new HushActions.Taken("not_here", "",
+                    "This server does not take that yet.");
+        }
+        return (kind, player, name, link, options) -> {
+            de.raindancer.core.moderation.review.StaffReviews.Answer answer = staff.submit(
+                    new de.raindancer.core.moderation.review.StaffReviews.Submission(kind, player, name, link, options,
+                            "discord"));
+            return new HushActions.Taken(answer.outcome(), answer.ref(), answer.text());
+        };
     }
 }
