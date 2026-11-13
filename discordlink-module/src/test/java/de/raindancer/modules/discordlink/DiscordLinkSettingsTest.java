@@ -18,7 +18,7 @@ class DiscordLinkSettingsTest {
         DiscordLinkSettings d = DiscordLinkSettings.DEFAULTS;
         return new DiscordLinkSettings(d.enabled(), guild, d.joinCodes(), d.codeMinutes(), d.syncMinutes(), more,
                 STAFF, d.lookupUrl(), d.hushUrl(), d.hushServerName(), d.hushAnticheat(), d.hushPunishments(),
-                d.hushReports(), d.hushServer(), d.hushAdminMode(), d.hushActions(), d.hushPollSeconds(), d.hushReviews(), d.discordName(), d.networkName(), d.accent());
+                d.hushReports(), d.hushServer(), d.hushAdminMode(), d.hushActions(), d.hushPollSeconds(), d.hushReviews(), d.discordName(), d.networkName(), d.accent(), d.invite());
     }
 
     @Test
@@ -69,13 +69,13 @@ class DiscordLinkSettingsTest {
         DiscordLinkSettings hyades = new DiscordLinkSettings(d.enabled(), d.guildId(), d.joinCodes(), d.codeMinutes(), d.syncMinutes(),
                 d.moreLinkGuildIds(), d.lookupGuildId(), d.lookupUrl(), d.hushUrl(), d.hushServerName(), d.hushAnticheat(),
                 d.hushPunishments(), d.hushReports(), d.hushServer(), d.hushAdminMode(), d.hushActions(), d.hushPollSeconds(), d.hushReviews(),
-                "the <#6EC1EA>hyadesmc.net</#6EC1EA> Discord", "<#6EC1EA>Hyades</#6EC1EA>", "#6EC1EA");
+                "the <#6EC1EA>hyadesmc.net</#6EC1EA> Discord", "<#6EC1EA>Hyades</#6EC1EA>", "#6EC1EA", "");
         assertEquals("Hyades", hyades.plainNetwork());
         assertEquals("the <#6EC1EA>hyadesmc.net</#6EC1EA> Discord", hyades.wording()[1].toString());
         assertEquals("#6EC1EA", hyades.wording()[3].toString());
         DiscordLinkSettings blank = new DiscordLinkSettings(d.enabled(), d.guildId(), d.joinCodes(), d.codeMinutes(), d.syncMinutes(),
                 d.moreLinkGuildIds(), d.lookupGuildId(), d.lookupUrl(), d.hushUrl(), d.hushServerName(), d.hushAnticheat(),
-                d.hushPunishments(), d.hushReports(), d.hushServer(), d.hushAdminMode(), d.hushActions(), d.hushPollSeconds(), d.hushReviews(), " ", null, "");
+                d.hushPunishments(), d.hushReports(), d.hushServer(), d.hushAdminMode(), d.hushActions(), d.hushPollSeconds(), d.hushReviews(), " ", null, "", "");
         assertEquals("Lilly's network", blank.plainNetwork());
         assertEquals("light_purple", blank.wording()[3].toString());
     }
@@ -88,7 +88,7 @@ class DiscordLinkSettingsTest {
         DiscordLinkSettings hyades = new DiscordLinkSettings(d.enabled(), d.guildId(), d.joinCodes(), d.codeMinutes(), d.syncMinutes(),
                 d.moreLinkGuildIds(), d.lookupGuildId(), d.lookupUrl(), d.hushUrl(), d.hushServerName(), d.hushAnticheat(),
                 d.hushPunishments(), d.hushReports(), d.hushServer(), d.hushAdminMode(), d.hushActions(), d.hushPollSeconds(), d.hushReviews(),
-                "the <#6EC1EA>hyadesmc.net</#6EC1EA> Discord", "Hyades", "#6EC1EA");
+                "the <#6EC1EA>hyadesmc.net</#6EC1EA> Discord", "Hyades", "#6EC1EA", "");
         var mini = net.kyori.adventure.text.minimessage.MiniMessage.miniMessage();
         var plain = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText();
         for (var which : java.util.List.of(d, hyades)) {
@@ -102,5 +102,64 @@ class DiscordLinkSettingsTest {
             assertTrue(kick.contains("/link 75R6Y-MJUAM"), kick);
             assertTrue(!kick.contains("<") && !code.contains("<"), "no markup left over");
         }
+    }
+
+    private static DiscordLinkSettings invite(String invite) {
+        DiscordLinkSettings d = DiscordLinkSettings.DEFAULTS;
+        return new DiscordLinkSettings(d.enabled(), d.guildId(), d.joinCodes(), d.codeMinutes(), d.syncMinutes(),
+                d.moreLinkGuildIds(), d.lookupGuildId(), d.lookupUrl(), d.hushUrl(), d.hushServerName(), d.hushAnticheat(),
+                d.hushPunishments(), d.hushReports(), d.hushServer(), d.hushAdminMode(), d.hushActions(), d.hushPollSeconds(),
+                d.hushReviews(), "the <#6EC1EA>hyadesmc.net</#6EC1EA> Discord", "Hyades", "#6EC1EA", invite);
+    }
+
+    @Test
+    void noInviteByDefaultSoDiscordStaysTheLinkCode() {
+        assertEquals("", DiscordLinkSettings.DEFAULTS.invite());
+        assertEquals(java.util.Optional.empty(), DiscordLinkSettings.DEFAULTS.inviteUrl());
+        assertEquals(java.util.Optional.empty(), invite("   ").inviteUrl());
+        assertEquals(java.util.Optional.empty(), invite(null).inviteUrl());
+    }
+
+    @Test
+    void anInviteIsAnHttpsAddressAndABareOneGetsTheScheme() {
+        assertEquals(java.util.Optional.of("https://discord.gg/7w6FQncTqf"), invite(" https://discord.gg/7w6FQncTqf ").inviteUrl());
+        assertEquals(java.util.Optional.of("https://discord.gg/7w6FQncTqf"), invite("discord.gg/7w6FQncTqf").inviteUrl());
+        assertEquals(java.util.Optional.of("https://discord.com/invite/abc-DEF_1"), invite("https://discord.com/invite/abc-DEF_1").inviteUrl());
+    }
+
+    @Test
+    void anythingThatCouldBreakOutOfTheClickIsRefused() {
+        for (String bad : java.util.List.of("http://discord.gg/abc", "javascript:alert(1)", "https://discord.gg/a'><click:run_command:'/op me'>",
+                "https://discord.gg/a b", "https://discord.gg/<red>", "https://", "ftp://discord.gg/abc")) {
+            assertEquals(java.util.Optional.empty(), invite(bad).inviteUrl(), bad);
+        }
+    }
+
+    @Test
+    void theInviteMessageIsOneClickableLine() {
+        org.bukkit.configuration.file.YamlConfiguration yaml = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(
+                java.nio.file.Path.of("src/main/resources/de/raindancer/modules/discordlink/messages.yml").toFile());
+        DiscordLinkSettings hyades = invite("https://discord.gg/7w6FQncTqf");
+        var mini = net.kyori.adventure.text.minimessage.MiniMessage.miniMessage();
+        var plain = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText();
+        var component = mini.deserialize(de.raindancer.core.ui.text.Text.fill(yaml.getString("discordlink.invite"),
+                hyades.inviteValues().toArray()));
+        assertEquals("Join the hyadesmc.net Discord: discord.gg/7w6FQncTqf (click) · /link ties your account to it.",
+                plain.serialize(component));
+        java.util.List<net.kyori.adventure.text.event.ClickEvent> clicks = new java.util.ArrayList<>();
+        collectClicks(component, clicks);
+        assertEquals(1, clicks.size(), "exactly one button");
+        assertEquals(net.kyori.adventure.text.event.ClickEvent.Action.OPEN_URL, clicks.get(0).action());
+        assertEquals("https://discord.gg/7w6FQncTqf",
+                ((net.kyori.adventure.text.event.ClickEvent.Payload.Text) clicks.get(0).payload()).value());
+    }
+
+    private static void collectClicks(net.kyori.adventure.text.Component component,
+                                      java.util.List<net.kyori.adventure.text.event.ClickEvent> into) {
+        var click = component.clickEvent();
+        if (click != null && (into.isEmpty() || !into.get(into.size() - 1).equals(click))) {
+            into.add(click);
+        }
+        component.children().forEach(child -> collectClicks(child, into));
     }
 }

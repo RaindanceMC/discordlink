@@ -17,6 +17,8 @@ discordlink:
     not-linked: "<gray>Nothing to unlink, your account isn't linked."
     failed: "<red>Couldn't make a code right now. Try again in a moment."
 
+  invite: "<gray>Join <discord>: <button> <dark_gray>·</dark_gray> <white>/link</white> ties your account to it."
+
   linked-in-game: "<green>Linked! This player now belongs to Discord account <white><account></white>."
 
   admin:

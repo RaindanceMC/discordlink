@@ -1,6 +1,7 @@
 package de.raindancer.modules.discordlink;
 
 import de.raindancer.modules.api.ModuleCommand;
+import de.raindancer.modules.discordlink.command.DiscordCommand;
 import de.raindancer.modules.discordlink.command.DiscordLinkAdminCommand;
 import de.raindancer.modules.discordlink.command.LinkCommand;
 
@@ -22,8 +23,9 @@ public final class DiscordLinkCommands {
     public static List<ModuleCommand> declared() {
         return List.of(
                 ModuleCommand.of("link", "Shows a code to link your Discord account", new LinkCommand(DiscordLinkCommands::require))
-                        .aliased("discord")
                         .taking("(nothing) — a code to type into Discord's /link", "unlink — unlinks your account"),
+                ModuleCommand.of("discord", "Shows the invite to the server's Discord", new DiscordCommand(DiscordLinkCommands::require))
+                        .aliased("dc"),
                 ModuleCommand.of("discordlink", "The Discord link bot: status, restart, token",
                                 new DiscordLinkAdminCommand(DiscordLinkCommands::require))
                         .needing(ADMIN_NODE)

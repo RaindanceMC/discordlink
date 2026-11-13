@@ -21,7 +21,7 @@ Lilly's Discord and her Minecraft servers, joined.
 3. Invite the bot (no permissions needed): `https://discord.com/oauth2/authorize?client_id=<app id>&scope=bot%20applications.commands&permissions=0`
 4. In Discord: `/mcadmin whitelisters` (pick roles), `/mcadmin map role:<role> group:<luckperms group>`, `/mcadmin show`.
 
-In game: `/link` (a code for an already whitelisted player), `/link unlink`; `/discordlink status|restart`.
+In game: `/link` (a code for an already whitelisted player), `/link unlink`; `/discord` / `/dc` (the invite from setting `invite`, as a button; without one a link code); `/discordlink status|restart`.
 Discord: `/link`, `/unlink`, `/accounts`, `/whitelist`, `/mcadmin …` (Manage Server).
 
 A test server started from a copy of the live data must run with `RAINS_DISCORDLINK_BOT=off`: the copy holds the

@@ -123,13 +123,46 @@ public record DiscordLinkSettings(
         @In("discordlink") @Title("Wording: accent colour")
         @Describe("The colour of the /link code on screen: a MiniMessage colour like light_purple or #6EC1EA.")
         @Key("accent")
-        String accent) {
+        String accent,
+
+        @In("discordlink") @Title("Discord invite")
+        @Describe("The invite /discord and /dc show as a button, e.g. https://discord.gg/abc123. Empty: /discord gives a "
+                + "link code, like /link.")
+        @Key("invite")
+        String invite) {
 
     public static final String HUSH_URL = "https://hush.raindancer118.de/api/minecraft/events";
 
     public static final DiscordLinkSettings DEFAULTS = new DiscordLinkSettings(true, "", true, 30, 30, "", "",
             "https://applications.lillyyxoxo.net", HUSH_URL, "", true, true, true, true, true, true, 3, true,
-            "<#5865F2>Lilly's Discord</#5865F2>", "Lilly's network", "light_purple");
+            "<#5865F2>Lilly's Discord</#5865F2>", "Lilly's network", "light_purple", "");
+
+    // The address goes into <click:open_url:'…'>, so nothing that could close the quote or open a tag gets through.
+    private static final java.util.regex.Pattern SAFE_INVITE = java.util.regex.Pattern.compile("https://[A-Za-z0-9.-]+\\.[A-Za-z]{2,}(/[A-Za-z0-9._~/?=&%#-]*)?");
+
+    /** The invite as a safe https address, or empty when none is set or it is not one. */
+    public java.util.Optional<String> inviteUrl() {
+        if (invite == null || invite.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        String url = invite.strip();
+        if (!url.contains("://")) {
+            url = "https://" + url;
+        }
+        return SAFE_INVITE.matcher(url).matches() ? java.util.Optional.of(url) : java.util.Optional.empty();
+    }
+
+    /** Placeholders for discordlink.invite: the wording plus the button, opened and closed in one piece. */
+    public java.util.List<Object> inviteValues() {
+        String url = inviteUrl().orElse("");
+        String shown = url.replaceFirst("^https://(www\\.)?", "");
+        String accent = orElse(this.accent, DEFAULTS.accent());
+        java.util.List<Object> values = new java.util.ArrayList<>(java.util.Arrays.asList(wording()));
+        values.addAll(java.util.List.of("button", de.raindancer.core.ui.text.Markup.of(
+                "<click:open_url:'" + url + "'><hover:show_text:'<gray>Open it in your browser'><" + accent + "><u>" + shown
+                        + "</u></" + accent + "> <dark_gray>(click)</dark_gray></hover></click>")));
+        return values;
+    }
 
     /** Placeholders for the messages that name the Discord server and the network. */
     public Object[] wording() {

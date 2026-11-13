@@ -8,9 +8,9 @@ category: Chat & community
 order: 30
 module: discordlink
 when: discordlink:enabled
-aliases: [link, discord, unlink, whitelist, whitelisted, accounts, linking]
+aliases: [link, discord, dc, invite, unlink, whitelist, whitelisted, accounts, linking]
 keywords: [bot, code, kick, join, not whitelisted, friend, roles, status, player, account]
-commands: [link]
+commands: [link, discord]
 sections:
   - question: What does linking do?
     title: What linking does
@@ -22,10 +22,14 @@ sections:
     text: |
       {if:discordlink:join-codes}When you are turned away, the screen shows a <white>code</white> like <white>ABCDE-12345</white>. Open the server's Discord and type {cmd:/link <code>} there — the bot whitelists you and links your account. Then join again. The code lasts {setting:discordlink:code-minutes|minutes}; join again and you get a fresh one, the same one again while it lasts.{else}Ask a moderator to whitelist you, or a friend who is allowed to (see below). Codes on the kick screen are switched off on this server.{/if}
       Bedrock players: join once so the server can show you a code, then use it in Discord.
+  - question: Where is the Discord?
+    title: The Discord
+    text: |
+      {run:/discord} (or {cmd:/dc}) shows the server's invite — click it and your browser opens it. {if:discordlink:invite}{else}This server has no invite set, so it gives you a link code instead, like {cmd:/link}.{/if}
   - question: How do I link while whitelisted?
     title: Linking in game
     text: |
-      Type {run:/link} (or {cmd:/discord}). You get a code, valid for {setting:discordlink:code-minutes|minutes}. Type {cmd:/link <code>} in the server's Discord — the <i>slash</i> command, the bot answers only you.
+      Type {run:/link}. You get a code, valid for {setting:discordlink:code-minutes|minutes}. Type {cmd:/link <code>} in the server's Discord — the <i>slash</i> command, the bot answers only you.
       If your account is already linked I say so; if the bot is not running somewhere on the network right now, I say that too and you try again in a bit.
       Codes are typed by hand, so they skip the confusing characters (no 0/O, no 1/I). Spaces and small letters are fine.
   - question: Why does Discord say my code is wrong?
