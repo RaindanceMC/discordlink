@@ -186,6 +186,23 @@ class HushActionsTest {
     }
 
     @Test
+    @DisplayName("set_groups: a group they turn out to have already, or not to have, is no failure — a stale view is not a problem card")
+    void setGroupsStaleView() {
+        groups.existing.addAll(Set.of("owner", "admin", "mod"));
+        groups.direct.put(ALEX, new HashSet<>(Set.of("owner", "admin")));
+        groups.staleOnce = Set.of("mod");   // the server still saw the old groups (14:04, 13.11.2026)
+
+        actions.handle(action("g3", "set_groups").put("player", ALEX.toString())
+                .put("groups", net.dv8tion.jda.api.utils.data.DataArray.fromCollection(List.of("owner", "admin")))
+                .put("managed", net.dv8tion.jda.api.utils.data.DataArray.fromCollection(List.of("owner", "admin", "mod"))));
+
+        DataObject result = answers.get(0);
+        assertThat(result.getBoolean("ok")).as(result.toString()).isTrue();
+        assertThat(result.getObject("data").getArray("failed").length()).isZero();
+        assertThat(groups.direct.get(ALEX)).containsExactlyInAnyOrder("owner", "admin");
+    }
+
+    @Test
     @DisplayName("set_groups: a group that does not exist is reported, the rest is still applied")
     void setGroupsMissingGroup() {
         groups.existing.add("admin");

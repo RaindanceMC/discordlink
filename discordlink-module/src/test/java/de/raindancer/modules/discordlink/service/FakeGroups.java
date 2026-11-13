@@ -17,6 +17,8 @@ public final class FakeGroups implements PermissionGroups {
 
     public final Map<UUID, Set<String>> direct = new HashMap<>();
     public final Set<String> existing = new HashSet<>();
+    /** What the next directGroupsOf answers instead of the truth, once: a server that has not caught up yet. */
+    public Set<String> staleOnce;
 
     @Override
     public boolean editable() {
@@ -45,6 +47,11 @@ public final class FakeGroups implements PermissionGroups {
 
     @Override
     public Set<String> directGroupsOf(UUID who) {
+        if (staleOnce != null) {
+            Set<String> stale = staleOnce;
+            staleOnce = null;
+            return stale;
+        }
         return Set.copyOf(direct.getOrDefault(who, Set.of()));
     }
 

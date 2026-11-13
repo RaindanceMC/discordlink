@@ -262,8 +262,27 @@ public final class HushActions {
         DataArray joined = DataArray.empty();
         DataArray left = DataArray.empty();
         DataArray failed = DataArray.empty();
-        change.join().forEach(group -> (permissions.join(player, group) ? joined : failed).add(group));
-        change.leave().forEach(group -> (permissions.leave(player, group) ? left : failed).add(group));
+        List<String> notJoined = new ArrayList<>();
+        List<String> notLeft = new ArrayList<>();
+        change.join().forEach(group -> {
+            if (permissions.join(player, group)) {
+                joined.add(group);
+            } else {
+                notJoined.add(group);
+            }
+        });
+        change.leave().forEach(group -> {
+            if (permissions.leave(player, group)) {
+                left.add(group);
+            } else {
+                notLeft.add(group);
+            }
+        });
+        // "Nothing changed" is no failure when the view we judged from was behind (another server had just set
+        // the groups): only a group they still lack, or still hold, is one.
+        Set<String> now = permissions.directGroupsOf(player);
+        notJoined.stream().filter(group -> !now.contains(group)).forEach(failed::add);
+        notLeft.stream().filter(now::contains).forEach(failed::add);
         // What we just changed ourselves is not news to tell Discord again.
         watcher.remember(player, permissions.directGroupsOf(player));
         return HushEvents.result(clock.getAsLong(), id, failed.length() == 0, failed.length() == 0 ? "applied" : "partly",
