@@ -1,4 +1,4 @@
-# Rain's Discord Link — every line this module says.
+# Rain's Discord Link: every line this module says.
 #
 # Offered as a floor: anything an owner already has in their own messages.yml wins.
 # The "discord" lines are sent to Discord as plain text, so Discord's own **bold** works there and colour tags do not.
@@ -19,7 +19,7 @@ discordlink:
 
   invite: "<gray>Join <discord>: <button> <dark_gray>·</dark_gray> <white>/link</white> ties your account to it."
 
-  linked-in-game: "<green>Linked! This player now belongs to Discord account <white><account></white>."
+  linked-in-game: "<green>Your Discord account <white><account></white> is linked."
 
   admin:
     usage: "<gray>/discordlink status  ·  restart  ·  link <name|uuid> <discord id>  ·  unlink <name|uuid>  ·  token <token>|clear  ·  lookupkey <key>|clear  ·  hushtoken <token>|clear <dark_gray>(these console only)<gray>  ·  hush status"
@@ -50,10 +50,10 @@ discordlink:
     lookup-not-here: "/lookup only works on the staff server."
     lookup-no-key: "Nobody by that name on the Minecraft server, and the website isn't connected yet (/discordlink lookupkey)."
     lookup-nothing: "Nothing found for **<name>**."
-    linked: "Linked! **<player>** is now connected to your Discord account."
-    linked-whitelisted: "You're in! **<player>** is whitelisted and linked to your Discord account. Join the server again."
-    whitelisted-again: "Welcome back! **<player>** is whitelisted again. Join the server again."
-    already-yours: "**<player>** is already linked to you. All good."
+    linked: "Linked. **<player>** is now connected to your Discord account."
+    linked-whitelisted: "**<player>** is whitelisted and linked to your Discord account. Join the server again."
+    whitelisted-again: "**<player>** is whitelisted again. Join the server again."
+    already-yours: "**<player>** is already linked to you."
     someone-elses: "**<player>** is already linked to a different Discord account. If that's wrong, ask the staff."
     one-is-enough: "You already have an account linked (**<linked>**). One per person. If you need another one, ask the staff."
     wrong-code: "That code doesn't work. It may have expired: join the server again to get a fresh one."
@@ -78,8 +78,8 @@ discordlink:
     admin-show: "**Whitelister roles:** <whitelisters>\n**Role → group:**\n<mapping>\n**Linked Discord accounts:** <links>\n**Welcomes go to:** <announce>"
     admin-sync-started: "Checking everybody's groups against their roles now."
     save-failed: "Couldn't save that, the database didn't answer. Try again."
-    welcome: "🎉 <user> is now on the whitelist as **<player>**. Welcome to the SMP!"
-    friend-welcome: "🎉 <user> added **<player>** to the whitelist. Welcome to the SMP!"
+    welcome: "<user> is now on the whitelist as **<player>**. Welcome to the SMP."
+    friend-welcome: "<user> added **<player>** to the whitelist. Welcome to the SMP."
     admin-announce-set: "New whitelistings will be announced in <channel>."
     admin-announce-here: "New whitelistings will be announced right where /link was used."
     player-unknown: "The network has never seen a player called **<player>**."
