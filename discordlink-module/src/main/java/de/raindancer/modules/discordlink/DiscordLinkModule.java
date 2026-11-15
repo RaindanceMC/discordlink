@@ -71,7 +71,6 @@ public final class DiscordLinkModule implements FlexModule {
         SettingsStore<DiscordLinkSettings> settings = context.settings(DiscordLinkSettings.class, DiscordLinkSettings.DEFAULTS);
         context.core().messages().defineFrom(DiscordLinkModule.class.getResourceAsStream("messages.yml"),
                 context.chat().brand()::chatPrefix);
-        context.core().messages().seriousFrom(DiscordLinkModule.class.getResourceAsStream("messages-serious.yml"));
 
         LinkStore store = new LinkStore(context.core().databases().shared(LinkStore.NAME, LinkStore.SCHEMA));
         RoleConfigStore roles = new RoleConfigStore(YamlStore.network(context.dataFolder().resolve("roles.yml")));
