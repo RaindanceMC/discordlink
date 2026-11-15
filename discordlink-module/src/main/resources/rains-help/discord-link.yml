@@ -1,8 +1,8 @@
 id: discord-link
 title: Discord & whitelist
-summary: Link your Minecraft account to Discord — it whitelists you, and your Discord roles can give you groups here.
+summary: "Link your Minecraft account to Discord. It whitelists you, and your Discord roles can give you groups here."
 intro: |
-  Two worlds, one you. Link your Minecraft name to your Discord account once, and neither forgets who you are. It takes a code and about ten seconds, I timed it.
+  Link your Minecraft name to your Discord account once. It takes a code and about ten seconds.
 icon: NAME_TAG
 category: Chat & community
 order: 30
@@ -15,28 +15,28 @@ sections:
   - question: What does linking do?
     title: What linking does
     text: |
-      It ties your Minecraft account to your Discord account. If this server is whitelisted, it is also how you <i>get</i> on the whitelist without begging a moderator. And where Discord roles are tied to groups here, you get those groups automatically.
-      Each Discord account may link one Minecraft account — unless it holds one of the roles the staff picked for that.
-  - question: I can't join — "not whitelisted"?
+      It ties your Minecraft account to your Discord account. If this server is whitelisted, it is also how you <i>get</i> on the whitelist without asking a moderator. And where Discord roles are tied to groups here, you get those groups automatically.
+      Each Discord account may link one Minecraft account, unless it holds one of the roles the staff picked for that.
+  - question: "I can't join, it says not whitelisted"
     title: Not whitelisted
     text: |
-      {if:discordlink:join-codes}When you are turned away, the screen shows a <white>code</white> like <white>ABCDE-12345</white>. Open the server's Discord and type {cmd:/link <code>} there — the bot whitelists you and links your account. Then join again. The code lasts {setting:discordlink:code-minutes|minutes}; join again and you get a fresh one, the same one again while it lasts.{else}Ask a moderator to whitelist you, or a friend who is allowed to (see below). Codes on the kick screen are switched off on this server.{/if}
+      {if:discordlink:join-codes}When you are turned away, the screen shows a <white>code</white> like <white>ABCDE-12345</white>. Open the server's Discord and type {cmd:/link <code>} there. The bot whitelists you and links your account. Then join again. The code lasts {setting:discordlink:code-minutes|minutes}; join again to get a fresh one (the same one again while it lasts).{else}Ask a moderator to whitelist you, or a friend who is allowed to (see below). Codes on the kick screen are switched off on this server.{/if}
       Bedrock players: join once so the server can show you a code, then use it in Discord.
   - question: Where is the Discord?
     title: The Discord
     text: |
-      {run:/discord} (or {cmd:/dc}) shows the server's invite — click it and your browser opens it. {if:discordlink:invite}{else}This server has no invite set, so it gives you a link code instead, like {cmd:/link}.{/if}
+      {run:/discord} (or {cmd:/dc}) shows the server's invite. Click it to open it in your browser. {if:discordlink:invite}{else}This server has no invite set, so it gives you a link code instead, like {cmd:/link}.{/if}
   - question: How do I link while whitelisted?
     title: Linking in game
     text: |
-      Type {run:/link}. You get a code, valid for {setting:discordlink:code-minutes|minutes}. Type {cmd:/link <code>} in the server's Discord — the <i>slash</i> command, the bot answers only you.
-      If your account is already linked I say so; if the bot is not running somewhere on the network right now, I say that too and you try again in a bit.
+      Type {run:/link}. You get a code, valid for {setting:discordlink:code-minutes|minutes}. Type {cmd:/link <code>} in the server's Discord. It is a <i>slash</i> command and the bot answers only you.
+      If your account is already linked, you are told. If the bot is not running anywhere on the network, you are told that too and can try again later.
       Codes are typed by hand, so they skip the confusing characters (no 0/O, no 1/I). Spaces and small letters are fine.
   - question: Why does Discord say my code is wrong?
     title: Code trouble
     text: |
       It expired (after {setting:discordlink:code-minutes|minutes}) or has a typo. Get a fresh one with {run:/link} or by joining again.
-      Five wrong tries from one Discord account lock it out for ten minutes. The bot will tell you. Patience is a code, too.
+      Five wrong tries from one Discord account lock it out for ten minutes. The bot tells you.
   - question: How do I unlink?
     title: Unlinking
     text: |
@@ -45,18 +45,18 @@ sections:
     title: Discord commands
     text: |
       In the server's Discord:
-      <white>/link</white> <i>code</i> — link as above.
-      <white>/accounts</white> — which Minecraft accounts are linked to you.
-      <white>/unlink</white> — undo one.
-      <white>/status</white> — a status board of the network: which servers are up, players online, TPS. It has a Refresh button anyone may press.
-      <white>/player</white> <i>name</i> — a player's card: online or last seen, first joined, playtime, rank, balance, guild, job and whether they are linked.
-      <white>/whitelist</white> <i>player</i> — see the next question.
+      <white>/link</white> <i>code</i>: link as above.
+      <white>/accounts</white>: which Minecraft accounts are linked to you.
+      <white>/unlink</white>: undo one.
+      <white>/status</white>: a status board of the network: which servers are up, players online, TPS. It has a Refresh button anyone may press.
+      <white>/player</white> <i>name</i>: a player's card: online or last seen, first joined, playtime, rank, balance, guild, job and whether they are linked.
+      <white>/whitelist</white> <i>player</i>: see the next question.
   - question: Can I whitelist a friend?
     title: Whitelisting a friend
     text: |
-      Only with one of the roles the staff picked. Then {cmd:/whitelist <Java name>} in Discord whitelists that Java account — the bot checks the name exists at Mojang. Everybody else: your friend joins, gets their own code and does it themselves.
+      Only with one of the roles the staff picked. Then {cmd:/whitelist <Java name>} in Discord whitelists that Java account. The bot checks that the name exists at Mojang. Everybody else: your friend joins, gets their own code and does it themselves.
       Java names only; Bedrock players use the code route.
   - question: Do my Discord roles give me things?
     title: Roles to groups
     text: |
-      Where staff have tied a Discord role to a group, you get that group while you have the role, and lose it when the role goes — or when you leave the Discord. It follows role changes at once and is double-checked every {setting:discordlink:sync-minutes|minutes}. It only ever touches groups some role is tied to; a group given to you by hand in game stays.
+      Where staff have tied a Discord role to a group, you get that group while you have the role, and lose it when the role goes or when you leave the Discord. It follows role changes at once and is double-checked every {setting:discordlink:sync-minutes|minutes}. It only ever touches groups some role is tied to; a group given to you by hand in game stays.
