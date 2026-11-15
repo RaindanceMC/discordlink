@@ -49,10 +49,10 @@ class LookupViewTest {
         assertThat(embed.getThumbnail().getUrl()).isEqualTo("https://static-cdn.jtvnw.net/x.png");
         assertThat(embed.getFields()).extracting(MessageEmbed.Field::getName).containsExactly("Twitch", "Applications");
         String twitch = embed.getFields().getFirst().getValue();
-        assertThat(twitch).contains("✅ **Follows since 1 Apr 2025** · for 1 year, 6 months")
-                .contains("⭐ **Subscribed, Tier 1** · Gifted by Generous_Gifter")
-                .contains("❔ **Ban status unknown** · Needs Lilly's channel connected")
-                .contains("❌ **Doesn't follow**").contains("▫️ **Account since 4 May 2019**");
+        assertThat(twitch).contains("✔ **Follows since 1 Apr 2025** · for 1 year, 6 months")
+                .contains("★ **Subscribed, Tier 1** · Gifted by Generous_Gifter")
+                .contains("? **Ban status unknown** · Needs Lilly's channel connected")
+                .contains("✘ **Doesn't follow**").contains("· **Account since 4 May 2019**");
         assertThat(embed.getDescription()).contains("Nothing found on Minecraft · Lilly's Discord")
                 .contains("[Open in the panel](https://applications.lillyyxoxo.net/admin/lookup?q=cherryb_)");
     }

@@ -234,7 +234,7 @@ public final class DiscordBot implements IDiscordLinkService {
             started.awaitReady();
             Guild guild = started.getGuildById(guildId);
             if (guild == null) {
-                report("the bot is not on Discord server " + guildId + " — invite it first");
+                report("the bot is not on Discord server " + guildId + ". Invite it first.");
                 started.shutdown();
                 return;
             }
@@ -281,7 +281,7 @@ public final class DiscordBot implements IDiscordLinkService {
         }
         Guild staff = running.getGuildById(now.lookupGuildId().strip());
         if (staff == null) {
-            String what = "the bot is not on the /lookup server " + now.lookupGuildId().strip() + " — invite it there";
+            String what = "the bot is not on the /lookup server " + now.lookupGuildId().strip() + ". Invite it there.";
             if (!what.equals(lookupProblemLogged)) {
                 lookupProblemLogged = what;
                 log.warn("Discord link: {}.", what);
@@ -299,7 +299,7 @@ public final class DiscordBot implements IDiscordLinkService {
         for (String id : settings.moreLinkGuilds()) {
             Guild guild = running.getGuildById(id);
             if (guild == null) {
-                log.warn("Discord link: the bot is not on Discord server {} (more servers for /link) — invite it there.", id);
+                log.warn("Discord link: the bot is not on Discord server {} (more servers for /link). Invite it there.", id);
                 continue;
             }
             registerCommands(guild);
@@ -616,11 +616,11 @@ public final class DiscordBot implements IDiscordLinkService {
                         : text("discordlink.discord.admin-announce-set", "channel", "<#" + id + ">");
             }
             case "show" -> {
-                String mapping = config.groups().isEmpty() ? "—" : config.groups().entrySet().stream()
+                String mapping = config.groups().isEmpty() ? "none" : config.groups().entrySet().stream()
                         .map(entry -> "<@&" + entry.getKey() + "> → " + entry.getValue())
                         .collect(Collectors.joining("\n"));
                 return text("discordlink.discord.admin-show", "whitelisters",
-                        config.whitelisters().isEmpty() ? "—" : mentions(config.whitelisters()),
+                        config.whitelisters().isEmpty() ? "none" : mentions(config.whitelisters()),
                         "mapping", mapping, "links", String.valueOf(links.allDiscordIds().size()),
                         "announce", config.announceChannel() == null ? "where /link is used" : "<#" + config.announceChannel() + ">");
             }
@@ -692,7 +692,7 @@ public final class DiscordBot implements IDiscordLinkService {
     }
 
     private static ActionRow statusButtons() {
-        return ActionRow.of(net.dv8tion.jda.api.components.buttons.Button.secondary(STATUS_REFRESH, "🔄 Refresh"));
+        return ActionRow.of(net.dv8tion.jda.api.components.buttons.Button.secondary(STATUS_REFRESH, "Refresh"));
     }
 
     private String player(SlashCommandInteractionEvent event) {

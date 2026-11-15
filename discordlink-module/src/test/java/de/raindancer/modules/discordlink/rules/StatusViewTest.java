@@ -25,12 +25,12 @@ class StatusViewTest {
     void everythingRunningSmoothly() {
         MessageEmbed embed = view.embed(new NetworkStatus(13, List.of(up("Lilly's SMP", 12, 19.98, 11.4, 192),
                 up("Hub", 1, 20, 3.2, 30))), NOW);
-        assertThat(embed.getTitle()).isEqualTo("🟢 Lilly's network is running smoothly");
+        assertThat(embed.getTitle()).isEqualTo("Lilly's network is running smoothly");
         assertThat(embed.getColorRaw()).isEqualTo(StatusView.GREEN);
         assertThat(embed.getDescription()).contains("**13** players online").contains("**2** of **2** servers up");
         MessageEmbed.Field smp = embed.getFields().getFirst();
-        assertThat(smp.getName()).isEqualTo("🟢 Lilly's SMP");
-        assertThat(smp.getValue()).contains("👥 12 players").contains("⚡ 20.0 TPS · 11 ms/tick").contains("⏱ up 3 h 12 min");
+        assertThat(smp.getName()).isEqualTo("Lilly's SMP");
+        assertThat(smp.getValue()).contains("12 players").contains("20.0 TPS · 11 ms/tick").contains("Up 3 h 12 min");
         assertThat(smp.isInline()).isTrue();
         assertThat(embed.getTimestamp()).isNotNull();
     }
@@ -38,21 +38,21 @@ class StatusViewTest {
     @Test
     void aSlowServerTurnsTheVerdictYellow() {
         MessageEmbed embed = view.embed(new NetworkStatus(5, List.of(up("Lilly's SMP", 5, 16.2, 61.8, 5), up("Hub", 0, 20, 2, 5))), NOW);
-        assertThat(embed.getTitle()).isEqualTo("🟡 Lilly's network is up, but a bit slow");
+        assertThat(embed.getTitle()).isEqualTo("Lilly's network is up, but a bit slow");
         assertThat(embed.getColorRaw()).isEqualTo(StatusView.YELLOW);
-        assertThat(embed.getFields().getFirst().getName()).isEqualTo("🟡 Lilly's SMP");
-        assertThat(embed.getFields().getFirst().getValue()).contains("👥 5 players").contains("16.2 TPS · 62 ms/tick").contains("up 5 min");
+        assertThat(embed.getFields().getFirst().getName()).isEqualTo("Lilly's SMP (slow)");
+        assertThat(embed.getFields().getFirst().getValue()).contains("5 players").contains("16.2 TPS · 62 ms/tick").contains("Up 5 min");
     }
 
     @Test
     void anOfflineServerIsListedWithSince() {
         MessageEmbed embed = view.embed(new NetworkStatus(1, List.of(up("Hub", 1, 20, 2, 60), down("Arena", 90))), NOW);
-        assertThat(embed.getTitle()).isEqualTo("🟠 1 of 2 servers are up");
+        assertThat(embed.getTitle()).isEqualTo("1 of 2 servers are up");
         assertThat(embed.getColorRaw()).isEqualTo(StatusView.ORANGE);
         MessageEmbed.Field arena = embed.getFields().get(1);
-        assertThat(arena.getName()).isEqualTo("🔴 Arena");
+        assertThat(arena.getName()).isEqualTo("Arena");
         assertThat(arena.getValue()).contains("Offline since <t:" + (NOW - 90 * 60_000) / 1000 + ":R>");
-        assertThat(embed.getFields().get(0).getValue()).contains("👤 1 player").doesNotContain("1 players");
+        assertThat(embed.getFields().get(0).getValue()).contains("1 player").doesNotContain("1 players");
     }
 
     @Test
@@ -64,7 +64,7 @@ class StatusViewTest {
     @Test
     void nothingKnownAtAll() {
         MessageEmbed embed = view.embed(new NetworkStatus(0, List.of()), NOW);
-        assertThat(embed.getTitle()).isEqualTo("🔴 No server is answering right now");
+        assertThat(embed.getTitle()).isEqualTo("No server is answering right now");
         assertThat(embed.getColorRaw()).isEqualTo(StatusView.RED);
     }
 }

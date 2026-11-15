@@ -27,15 +27,15 @@ class PlayerViewTest {
 
         assertThat(embed.getTitle()).isEqualTo("Alex");
         assertThat(embed.getThumbnail().getUrl()).isEqualTo("https://mc-heads.net/avatar/" + alex + "/64");
-        assertThat(field(embed, "Status").getValue()).isEqualTo("🟢 Online on Lilly's SMP");
-        assertThat(field(embed, "💰 Balance").getValue()).isEqualTo("342,180 coins");
-        assertThat(field(embed, "🛡️ Guild").getValue()).isEqualTo("[ELF] Elves");
-        assertThat(field(embed, "⛏️ Job").getValue()).isEqualTo("Miner");
-        assertThat(field(embed, "🏆 Achievements").getValue()).isEqualTo("12 earned · 340 points");
-        assertThat(field(embed, "⏱️ Playtime").getValue()).isEqualTo("12 h 34 min");
-        assertThat(field(embed, "🎖️ Rank").getValue()).isEqualTo("admin");
-        assertThat(field(embed, "📅 First joined").getValue()).isEqualTo("<t:1750000000:D>");
-        assertThat(field(embed, "🔗 Discord").getValue()).isEqualTo("Linked");
+        assertThat(field(embed, "Status").getValue()).isEqualTo("Online on Lilly's SMP");
+        assertThat(field(embed, "Balance").getValue()).isEqualTo("342,180 coins");
+        assertThat(field(embed, "Guild").getValue()).isEqualTo("[ELF] Elves");
+        assertThat(field(embed, "Job").getValue()).isEqualTo("Miner");
+        assertThat(field(embed, "Achievements").getValue()).isEqualTo("12 earned · 340 points");
+        assertThat(field(embed, "Playtime").getValue()).isEqualTo("12 h 34 min");
+        assertThat(field(embed, "Rank").getValue()).isEqualTo("admin");
+        assertThat(field(embed, "First joined").getValue()).isEqualTo("<t:1750000000:D>");
+        assertThat(field(embed, "Discord").getValue()).isEqualTo("Linked");
     }
 
     @Test
@@ -43,9 +43,9 @@ class PlayerViewTest {
         PlayerCard card = new PlayerCard(alex, "Ghost", Optional.empty(), Optional.of(5_000_000L), Optional.of("Arena"),
                 Optional.empty(), 15, Optional.empty(), false);
         MessageEmbed embed = view.embed(card);
-        assertThat(field(embed, "Status").getValue()).isEqualTo("⚫ Last seen <t:5000:R> on Arena");
+        assertThat(field(embed, "Status").getValue()).isEqualTo("Last seen <t:5000:R> on Arena");
         assertThat(embed.getFields()).extracting(MessageEmbed.Field::getName)
-                .doesNotContain("💰 Balance", "🛡️ Guild", "⛏️ Job", "🏆 Achievements", "🎖️ Rank", "📅 First joined");
-        assertThat(field(embed, "🔗 Discord").getValue()).isEqualTo("Not linked");
+                .doesNotContain("Balance", "Guild", "Job", "Achievements", "Rank", "First joined");
+        assertThat(field(embed, "Discord").getValue()).isEqualTo("Not linked");
     }
 }

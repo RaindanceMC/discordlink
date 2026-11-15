@@ -366,7 +366,7 @@ public final class HushFeed implements AutoCloseable {
         retryAt = now + (retry ? rule.delayMillisAfter(failures, retryAfter) : rule.delayMillisAfterDrop(failures));
         if (!warned) {
             warned = true;
-            warn.accept("Hush feed: " + what + (retry ? " — trying again" : " — those events are dropped") + hint(what)
+            warn.accept("Hush feed: " + what + (retry ? ", trying again" : ", those events are dropped") + hint(what)
                     + ". Further failures are not logged until it works again.");
         }
     }

@@ -39,18 +39,18 @@ public final class StatusView implements IDiscordLinkRule {
         boolean slow = status.servers().stream().anyMatch(line -> health(line) == Health.SLOW || health(line) == Health.ROUGH);
         EmbedBuilder embed = new EmbedBuilder().setTimestamp(Instant.ofEpochMilli(now));
         if (up == 0) {
-            embed.setTitle("🔴 No server is answering right now").setColor(RED);
+            embed.setTitle("No server is answering right now").setColor(RED);
         } else if (up < total) {
-            embed.setTitle("🟠 " + up + " of " + total + " servers are up").setColor(ORANGE);
+            embed.setTitle(up + " of " + total + " servers are up").setColor(ORANGE);
         } else if (slow) {
-            embed.setTitle("🟡 " + network + " is up, but a bit slow").setColor(YELLOW);
+            embed.setTitle(network + " is up, but a bit slow").setColor(YELLOW);
         } else {
-            embed.setTitle("🟢 " + network + " is running smoothly").setColor(GREEN);
+            embed.setTitle(network + " is running smoothly").setColor(GREEN);
         }
         embed.setDescription("**" + status.online() + "** player" + (status.online() == 1 ? "" : "s") + " online · **"
                 + up + "** of **" + total + "** servers up");
         for (NetworkStatus.Line line : status.servers().stream().limit(24).toList()) {
-            embed.addField(mark(health(line)) + " " + line.name(), value(line, now), true);
+            embed.addField(line.name() + mark(health(line)), value(line, now), true);
         }
         embed.setFooter("Refresh with the button below");
         return embed.build();
@@ -71,10 +71,10 @@ public final class StatusView implements IDiscordLinkRule {
 
     private static String mark(Health health) {
         return switch (health) {
-            case GOOD -> "🟢";
-            case SLOW -> "🟡";
-            case ROUGH -> "🟠";
-            case DOWN -> "🔴";
+            case GOOD -> "";
+            case SLOW -> " (slow)";
+            case ROUGH -> " (rough)";
+            case DOWN -> "";
         };
     }
 
@@ -83,18 +83,18 @@ public final class StatusView implements IDiscordLinkRule {
             return line.downSince() > 0 ? "Offline since <t:" + line.downSince() / 1000 + ":R>" : "Offline";
         }
         StringBuilder value = new StringBuilder(switch (line.players()) {
-            case 0 -> "💤 Nobody on";
-            case 1 -> "👤 1 player";
-            default -> "👥 " + line.players() + " players";
+            case 0 -> "Nobody on";
+            case 1 -> "1 player";
+            default -> line.players() + " players";
         });
         if (!Double.isNaN(line.tps())) {
-            value.append("\n⚡ ").append(String.format(Locale.ROOT, "%.1f", line.tps())).append(" TPS");
+            value.append("\n").append(String.format(Locale.ROOT, "%.1f", line.tps())).append(" TPS");
             if (!Double.isNaN(line.mspt())) {
                 value.append(" · ").append(Math.round(line.mspt())).append(" ms/tick");
             }
         }
         if (line.startedAt() > 0 && line.startedAt() <= now) {
-            value.append("\n⏱ up ").append(duration(now - line.startedAt()));
+            value.append("\nUp ").append(duration(now - line.startedAt()));
         }
         return value.toString();
     }

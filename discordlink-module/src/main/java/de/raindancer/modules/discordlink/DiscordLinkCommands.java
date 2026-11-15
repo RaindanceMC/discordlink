@@ -23,15 +23,15 @@ public final class DiscordLinkCommands {
     public static List<ModuleCommand> declared() {
         return List.of(
                 ModuleCommand.of("link", "Shows a code to link your Discord account", new LinkCommand(DiscordLinkCommands::require))
-                        .taking("(nothing) — a code to type into Discord's /link", "unlink — unlinks your account"),
+                        .taking("(nothing): a code to type into Discord's /link", "unlink: unlinks your account"),
                 ModuleCommand.of("discord", "Shows the invite to the server's Discord", new DiscordCommand(DiscordLinkCommands::require))
                         .aliased("dc"),
                 ModuleCommand.of("discordlink", "The Discord link bot: status, restart, token",
                                 new DiscordLinkAdminCommand(DiscordLinkCommands::require))
                         .needing(ADMIN_NODE)
-                        .taking("status", "restart", "token <token> | token clear — console only",
-                                "hushtoken <token> | hushtoken clear — console only", "hush status",
-                                "link <name|uuid> <discord id> — links an account by hand", "unlink <name|uuid>"));
+                        .taking("status", "restart", "token <token> | token clear: console only",
+                                "hushtoken <token> | hushtoken clear: console only", "hush status",
+                                "link <name|uuid> <discord id>: links an account by hand", "unlink <name|uuid>"));
     }
 
     static void ready(DiscordLinkServices live) {

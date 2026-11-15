@@ -63,7 +63,7 @@ public final class LookupView implements IDiscordLinkRule {
 
     private static String server(PlayerCard c, Optional<String> linkedTo) {
         StringBuilder s = new StringBuilder("**").append(c.name()).append("**\n");
-        s.append(c.onlineOn().map(server -> "🟢 Online on " + server)
+        s.append(c.onlineOn().map(server -> "Online on " + server)
                 .orElseGet(() -> c.lastSeen().map(at -> "Last seen <t:" + at / 1000 + ":R> on " + c.lastServer().orElse("?"))
                         .orElse("Never seen on the network"))).append("\n");
         c.firstSeen().ifPresent(at -> s.append("First joined <t:").append(at / 1000).append(":D>\n"));
@@ -75,11 +75,11 @@ public final class LookupView implements IDiscordLinkRule {
 
     static String mark(String state) {
         return switch (state == null ? "" : state) {
-            case "yes" -> "✅";
-            case "no" -> "❌";
-            case "sub" -> "⭐";
-            case "unknown" -> "❔";
-            default -> "▫️";
+            case "yes" -> "✔";
+            case "no" -> "✘";
+            case "sub" -> "★";
+            case "unknown" -> "?";
+            default -> "·";
         };
     }
 

@@ -51,7 +51,7 @@ public record DiscordLinkSettings(
         String moreLinkGuildIds,
 
         @In("discordlink") @Title("Discord server for /lookup")
-        @Describe("The staff server where /lookup exists and works — nowhere else. Empty: no /lookup.")
+        @Describe("The staff server where /lookup exists and works, and nowhere else. Empty: no /lookup.")
         @Key("lookup-guild-id")
         String lookupGuildId,
 
