@@ -110,6 +110,17 @@ public record DiscordLinkSettings(
         @Key("hush.reviews")
         boolean hushReviews,
 
+        @In("discordlink") @Title("Hush feed: playtime")
+        @Describe("Tells Hush every five minutes how many active minutes each linked player played today on this "
+                + "server (away does not count). Only linked players are counted. Needs the Hush token.")
+        @Key("hush.playtime")
+        boolean hushPlaytime,
+
+        @In("discordlink") @Title("Hush feed: playtime day zone")
+        @Describe("The time zone whose midnight ends a playtime day, e.g. Europe/Berlin (also used when this is not a zone).")
+        @Key("hush.playtime-zone")
+        String hushPlaytimeZone,
+
         @In("discordlink") @Title("Wording: the Discord server")
         @Describe("How in-game messages call the Discord server, MiniMessage allowed: \"Type /link CODE in <discord>\".")
         @Key("discord-name")
@@ -134,11 +145,8 @@ public record DiscordLinkSettings(
     public static final String HUSH_URL = "https://hush.raindancer118.de/api/minecraft/events";
 
     public static final DiscordLinkSettings DEFAULTS = new DiscordLinkSettings(true, "", true, 30, 30, "", "",
-            "https://applications.lillyyxoxo.net", HUSH_URL, "", true, true, true, true, true, true, 3, true,
+            "https://applications.lillyyxoxo.net", HUSH_URL, "", true, true, true, true, true, true, 3, true, true, "Europe/Berlin",
             "<#5865F2>Lilly's Discord</#5865F2>", "Lilly's network", "light_purple", "");
-
-    // The address goes into <click:open_url:'…'>, so nothing that could close the quote or open a tag gets through.
-    private static final java.util.regex.Pattern SAFE_INVITE = java.util.regex.Pattern.compile("https://[A-Za-z0-9.-]+\\.[A-Za-z]{2,}(/[A-Za-z0-9._~/?=&%#-]*)?");
 
     /** The invite as a safe https address, or empty when none is set or it is not one. */
     public java.util.Optional<String> inviteUrl() {
@@ -149,19 +157,32 @@ public record DiscordLinkSettings(
         if (!url.contains("://")) {
             url = "https://" + url;
         }
-        return SAFE_INVITE.matcher(url).matches() ? java.util.Optional.of(url) : java.util.Optional.empty();
+        return de.raindancer.modules.discordlink.hush.SafeUrl.https(url);
+    }
+
+    /** An https address as a click-to-open link in the accent colour, for a message; the address must be safe ({@code SafeUrl}). */
+    public de.raindancer.core.ui.text.Markup button(String url) {
+        String shown = url.replaceFirst("^https://(www\\.)?", "");
+        String accent = orElse(this.accent, DEFAULTS.accent());
+        return de.raindancer.core.ui.text.Markup.of(
+                "<click:open_url:'" + url + "'><hover:show_text:'<gray>Open it in your browser'><" + accent + "><u>" + shown
+                        + "</u></" + accent + "> <dark_gray>(click)</dark_gray></hover></click>");
     }
 
     /** Placeholders for discordlink.invite: the wording plus the button, opened and closed in one piece. */
     public java.util.List<Object> inviteValues() {
-        String url = inviteUrl().orElse("");
-        String shown = url.replaceFirst("^https://(www\\.)?", "");
-        String accent = orElse(this.accent, DEFAULTS.accent());
         java.util.List<Object> values = new java.util.ArrayList<>(java.util.Arrays.asList(wording()));
-        values.addAll(java.util.List.of("button", de.raindancer.core.ui.text.Markup.of(
-                "<click:open_url:'" + url + "'><hover:show_text:'<gray>Open it in your browser'><" + accent + "><u>" + shown
-                        + "</u></" + accent + "> <dark_gray>(click)</dark_gray></hover></click>")));
+        values.addAll(java.util.List.of("button", button(inviteUrl().orElse(""))));
         return values;
+    }
+
+    /** The zone whose midnight ends a playtime day; Europe/Berlin when the setting is empty or not a zone. */
+    public java.time.ZoneId playtimeZone() {
+        try {
+            return java.time.ZoneId.of(hushPlaytimeZone == null ? "" : hushPlaytimeZone.strip());
+        } catch (java.time.DateTimeException notAZone) {
+            return java.time.ZoneId.of(DEFAULTS.hushPlaytimeZone());
+        }
     }
 
     /** Placeholders for the messages that name the Discord server and the network. */

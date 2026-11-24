@@ -44,3 +44,7 @@ sections:
       <white>/mcadmin whitelisters</white>: pick the roles that may link several accounts and use /whitelist.
       <white>/mcadmin announce</white> <i>[channel]</i>: where new whitelistings are announced (without a channel: where /link was used).
       <white>/mcadmin show</white>: what is set up. <white>/mcadmin unlink</white> <i>player</i>: unlink anybody.
+  - question: What does Hush get about playtime?
+    title: Playtime for Hush
+    text: |
+      For linked players only, every five minutes: their active minutes today on this server (online and not away), with their Discord account and when they were first seen. The day ends at midnight in the zone from the settings (<white>hush.playtime-zone</white>, default Europe/Berlin). Switch it off with <white>hush.playtime</white>. Today's counts are kept in <white>playtime.json</white> in the module's folder and survive a restart.

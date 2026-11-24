@@ -27,7 +27,7 @@ import java.util.function.Supplier;
 
 /**
  * What Hush asks of this server (protocol v2, see Hush's docs/MINECRAFT.md): redeem a link code, unlink, set a
- * player's groups, list the links, build a player card, ban or unban a linked account. Every action is answered with a {@code result} event whose
+ * player's groups, list the links, build a player card, ban or unban a linked account, keep the giveaway snapshot. Every action is answered with a {@code result} event whose
  * {@code ref} is the action's id. An id seen twice (Hush asks again when an answer got lost) is answered again from
  * memory, never done twice.
  *
@@ -53,6 +53,7 @@ public final class HushActions {
     private final Reviews reviews;
     private final Submissions submissions;
     private final Bans bans;
+    private final GiveawayStore giveaways;
 
     /** Core's staff reviews: approve or refuse a request of a kind. @return the outcome, lower case */
     @FunctionalInterface
@@ -102,11 +103,21 @@ public final class HushActions {
                 (ban, player, name, by, reason) -> "failed");
     }
 
-    /** @param answer {@link HushFeed#offerNow}: somebody is waiting for these */
+    /** Before the giveaway (0.18.0): the snapshot is kept in memory only. */
     public HushActions(LinkService links, InfoService info, Supplier<PermissionGroups> groups, RoleSyncRule rule,
                        BiConsumer<String, Supplier<DataObject>> answer, LongSupplier clock, Executor async,
                        HushGroupWatcher watcher, PlayerResolver resolver, LinkNotes notes, Reviews reviews,
                        Submissions submissions, Bans bans) {
+        this(links, info, groups, rule, answer, clock, async, watcher, resolver, notes, reviews, submissions, bans,
+                new GiveawayStore());
+    }
+
+    /** @param answer {@link HushFeed#offerNow}: somebody is waiting for these */
+    public HushActions(LinkService links, InfoService info, Supplier<PermissionGroups> groups, RoleSyncRule rule,
+                       BiConsumer<String, Supplier<DataObject>> answer, LongSupplier clock, Executor async,
+                       HushGroupWatcher watcher, PlayerResolver resolver, LinkNotes notes, Reviews reviews,
+                       Submissions submissions, Bans bans, GiveawayStore giveaways) {
+        this.giveaways = giveaways;
         this.reviews = reviews;
         this.submissions = submissions;
         this.bans = bans;
@@ -167,6 +178,7 @@ public final class HushActions {
             case "review" -> review(id, action);
             case "review_submit" -> submit(id, action);
             case "punish" -> punish(id, action);
+            case "giveaway" -> giveaway(id, action);
             default -> HushEvents.result(clock.getAsLong(), id, false, "unknown_action", null);
         };
     }
@@ -381,6 +393,16 @@ public final class HushActions {
         return HushEvents.result(clock.getAsLong(), id, ok, outcome,
                 DataObject.empty().put("player", DataObject.empty().put("name", linked.get().name())
                         .put("uuid", player.toString())));
+    }
+
+    /** The referral giveaway as Hush sees it: kept for /giveaway, replacing the one before. */
+    private DataObject giveaway(String id, DataObject action) {
+        Optional<Giveaway> snapshot = Giveaway.parse(action);
+        if (snapshot.isEmpty()) {
+            return HushEvents.result(clock.getAsLong(), id, false, "bad_giveaway", null);
+        }
+        giveaways.replace(snapshot.get());
+        return HushEvents.result(clock.getAsLong(), id, true, "stored", null);
     }
 
     static DataObject cardData(PlayerCard c) {

@@ -222,6 +222,23 @@ public final class HushEvents {
                 .put("discord", discord).put("groups", array);
     }
 
+    /** One linked player's active minutes on this server on one day; {@code firstSeen} null when nobody knows it. */
+    public record PlaytimeEntry(UUID player, String name, String discord, int minutes, Long firstSeen) {
+    }
+
+    /** Hush's cap on the entries of one playtime event. */
+    public static final int PLAYTIME_MAX_ENTRIES = 200;
+
+    /** Active minutes of linked players on {@code day} (yyyy-mm-dd), absolute for that day. */
+    public static DataObject playtime(long at, String day, List<PlaytimeEntry> entries) {
+        DataArray array = DataArray.empty();
+        for (PlaytimeEntry entry : entries.stream().limit(PLAYTIME_MAX_ENTRIES).toList()) {
+            array.add(DataObject.empty().put("player", who(entry.name(), entry.player())).put("discord", entry.discord())
+                    .put("minutes", entry.minutes()).put("firstSeen", entry.firstSeen()));
+        }
+        return DataObject.empty().put("type", "playtime").put("at", at).put("day", day).put("entries", array);
+    }
+
     public static DataObject linkEntry(UUID player, String name, String discord) {
         return DataObject.empty().put("player", who(name, player)).put("discord", discord);
     }

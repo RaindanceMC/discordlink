@@ -3,6 +3,7 @@ package de.raindancer.modules.discordlink;
 import de.raindancer.modules.api.ModuleCommand;
 import de.raindancer.modules.discordlink.command.DiscordCommand;
 import de.raindancer.modules.discordlink.command.DiscordLinkAdminCommand;
+import de.raindancer.modules.discordlink.command.GiveawayCommand;
 import de.raindancer.modules.discordlink.command.LinkCommand;
 
 import java.util.List;
@@ -26,6 +27,8 @@ public final class DiscordLinkCommands {
                         .taking("(nothing): a code to type into Discord's /link", "unlink: unlinks your account"),
                 ModuleCommand.of("discord", "Shows the invite to the server's Discord", new DiscordCommand(DiscordLinkCommands::require))
                         .aliased("dc"),
+                ModuleCommand.of("giveaway", "Shows the running giveaway: your tickets, your referral link and your friends",
+                        new GiveawayCommand(DiscordLinkCommands::require)),
                 ModuleCommand.of("discordlink", "The Discord link bot: status, restart, token",
                                 new DiscordLinkAdminCommand(DiscordLinkCommands::require))
                         .needing(ADMIN_NODE)

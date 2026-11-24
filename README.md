@@ -39,5 +39,17 @@ after 5 minutes, 400/401/404 are not retried; one log line per outage.
 - Sources: RainsCore 2.71.0 `ModerationFeed` (fed by `Punishments`, and by Moderation 3.20.0 for anti-cheat alerts and
   reports); start/stop from `ServerLoadEvent` and the module's disable; a crash is a `hush-running` marker left behind.
 
+### Playtime and the referral giveaway (0.18.0)
+- **`playtime` event** (MC → Hush): per linked player their active minutes (online, not away by RainsCore's `Away`) on this
+  server on the calendar day `day`, absolute for that day. One tick a minute; every 5 minutes the entries that changed, plus
+  a player's entry when they quit; at most 200 entries per event. At midnight in the zone `hush.playtime-zone` the old day's
+  final values go once and counting starts at 0. Unlinked players are never tracked. `firstSeen` comes from Core's player
+  history, else Bukkit. Today's counts are kept in `playtime.json` and survive a restart.
+- **`giveaway` action** (Hush → MC): stores the snapshot (title, `endsAt`, rules, per member tickets, referral link, friends)
+  in memory and in `giveaway.json`; answers `stored`, or `bad_giveaway` for a payload that is not one. `title: null` ends it.
+- **`/giveaway`** (everybody): time left, your tickets, your referral link and the rules as clickable links, your friends
+  (`Bob: 35 / 60 min, 1 / 2 days`, or `counts`; ten shown, then "and N more"). Not linked: told to `/link` first.
+- Settings: `hush.playtime` (default on; also needs the Hush token) and `hush.playtime-zone` (default `Europe/Berlin`).
+
 ## Build
 `mvn install` — module tests (SQLite, and Postgres in CI), then the shaded plugin and its jar test.

@@ -19,6 +19,21 @@ discordlink:
 
   invite: "<gray>Join <discord>: <button> <dark_gray>·</dark_gray> <white>/link</white> ties your account to it."
 
+  giveaway:
+    none: "<gray>No giveaway is running right now."
+    head: "<gray>Giveaway: <white><title></white> <dark_gray>(ends in <left>)"
+    head-ended: "<gray>Giveaway: <white><title></white> <dark_gray>(ended)"
+    not-linked: "<gray>Link your account with <white>/link</white> first to take part."
+    tickets: "<gray>Your tickets: <white><tickets>"
+    link: "<gray>Your referral link: <button>"
+    no-link: "<gray>You have no referral link yet. Link your account with <white>/link</white>, then run <white>/referral link</white> in <discord>."
+    rules: "<gray>Rules: <button>"
+    friends: "<gray>Your friends, <white><counted></white> counted:"
+    friend-counts: "<dark_gray> · </dark_gray><white><name></white><gray>: counts"
+    friend-progress: "<dark_gray> · </dark_gray><white><name></white><gray>: <minutes> / <need-minutes> min, <days> / <need-days> days"
+    friends-more: "<dark_gray> · and <more> more"
+    no-friends: "<gray>Nobody has joined through your link yet."
+
   linked-in-game: "<green>Your Discord account <white><account></white> is linked."
 
   admin:

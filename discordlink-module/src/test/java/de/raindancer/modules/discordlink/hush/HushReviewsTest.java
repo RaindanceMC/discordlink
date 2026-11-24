@@ -60,6 +60,15 @@ class HushReviewsTest {
     }
 
     @Test
+    @DisplayName("the playtime event follows its own switch and needs no reverse channel")
+    void playtimeWanted() {
+        HushToken token = new HushToken("hmc_" + "x".repeat(40));
+        assertThat(new HushConfig("u", "s", token, true, true, true, true, true, false, 3, true, true).wants("playtime")).isTrue();
+        assertThat(new HushConfig("u", "s", token, true, true, true, true, true, false, 3, true, false).wants("playtime")).isFalse();
+        assertThat(new HushConfig("u", "s", token, true, true, true, true).wants("playtime")).as("by default").isTrue();
+    }
+
+    @Test
     @DisplayName("the review action reaches Core's decider and answers with its outcome")
     void action() {
         List<String> asked = new ArrayList<>();

@@ -8,9 +8,9 @@ category: Chat & community
 order: 30
 module: discordlink
 when: discordlink:enabled
-aliases: [link, discord, dc, invite, unlink, whitelist, whitelisted, accounts, linking]
+aliases: [link, discord, dc, invite, giveaway, referral, tickets, unlink, whitelist, whitelisted, accounts, linking]
 keywords: [bot, code, kick, join, not whitelisted, friend, roles, status, player, account]
-commands: [link, discord]
+commands: [link, discord, giveaway]
 sections:
   - question: What does linking do?
     title: What linking does
@@ -60,3 +60,7 @@ sections:
     title: Roles to groups
     text: |
       Where staff have tied a Discord role to a group, you get that group while you have the role, and lose it when the role goes or when you leave the Discord. It follows role changes at once and is double-checked every {setting:discordlink:sync-minutes|minutes}. It only ever touches groups some role is tied to; a group given to you by hand in game stays.
+  - question: How do I see the giveaway and tickets?
+    title: The giveaway
+    text: |
+      {run:/giveaway} shows the running giveaway, how long it lasts, your tickets, your referral link and the friends who joined through it. Each friend shows how far they are, like <white>35 / 60 min, 1 / 2 days</white>, or that they count. Your account has to be linked first. To get a referral link, link your account with {cmd:/link}, then run <white>/referral link</white> in the server's Discord.

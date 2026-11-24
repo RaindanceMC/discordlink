@@ -15,5 +15,6 @@ public record DiscordLinkServices(Plugin plugin, Server server, Messages message
                                   Secrets secrets, CodeService codes, LinkService links, DiscordBot bot,
                                   de.raindancer.modules.discordlink.hush.HushControl hush,
                                   de.raindancer.modules.discordlink.service.PlayerResolver resolver,
-                                  de.raindancer.modules.discordlink.hush.LinkNotes notes) {
+                                  de.raindancer.modules.discordlink.hush.LinkNotes notes,
+                                  de.raindancer.modules.discordlink.hush.GiveawayStore giveaways) {
 }

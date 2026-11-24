@@ -234,4 +234,31 @@ class HushEventsTest {
         assertThat(kept).isBetween(50, 499);
         assertThat(recap.getInt("commandsOmitted")).isEqualTo(500 - kept + 2);
     }
+
+    @Test
+    @DisplayName("playtime: the day, and per player the name, Discord id, minutes and firstSeen (null when unknown)")
+    void playtime() {
+        DataObject event = HushEvents.playtime(NOW, "2026-11-28", List.of(
+                new HushEvents.PlaytimeEntry(ALICE, "Alice", "123456789012345678", 42, 1_795_273_200_000L),
+                new HushEvents.PlaytimeEntry(BOB, "Bob", "222", 7, null)));
+
+        assertThat(event.getString("type")).isEqualTo("playtime");
+        assertThat(event.getLong("at")).isEqualTo(NOW);
+        assertThat(event.getString("day")).isEqualTo("2026-11-28");
+        DataObject alice = event.getArray("entries").getObject(0);
+        assertThat(alice.getObject("player").getString("name")).isEqualTo("Alice");
+        assertThat(alice.getObject("player").getString("uuid")).isEqualTo(ALICE.toString());
+        assertThat(alice.getString("discord")).isEqualTo("123456789012345678");
+        assertThat(alice.getInt("minutes")).isEqualTo(42);
+        assertThat(alice.getLong("firstSeen")).isEqualTo(1_795_273_200_000L);
+        assertThat(event.getArray("entries").getObject(1).isNull("firstSeen")).isTrue();
+    }
+
+    @Test
+    @DisplayName("playtime: never more than 200 entries in one event")
+    void playtimeCap() {
+        List<HushEvents.PlaytimeEntry> many = java.util.stream.IntStream.range(0, 250)
+                .mapToObj(i -> new HushEvents.PlaytimeEntry(new UUID(0, i), "P" + i, "1", 1, null)).toList();
+        assertThat(HushEvents.playtime(NOW, "2026-11-28", many).getArray("entries").length()).isEqualTo(200);
+    }
 }

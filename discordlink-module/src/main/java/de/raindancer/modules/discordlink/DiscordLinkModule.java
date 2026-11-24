@@ -34,6 +34,10 @@ import de.raindancer.modules.discordlink.hush.HushGroupWatcher;
 import de.raindancer.modules.discordlink.hush.HushFeed;
 import de.raindancer.modules.discordlink.hush.HushHooks;
 import de.raindancer.modules.discordlink.hush.HushServerListener;
+import de.raindancer.modules.discordlink.hush.GiveawayStore;
+import de.raindancer.modules.discordlink.hush.PlaytimeCounter;
+import de.raindancer.modules.discordlink.hush.PlaytimeListener;
+import de.raindancer.modules.discordlink.hush.PlaytimeTracker;
 import de.raindancer.modules.discordlink.hush.RunMarker;
 import de.raindancer.modules.discordlink.rules.HushRetryRule;
 
@@ -47,7 +51,7 @@ import java.util.List;
  */
 public final class DiscordLinkModule implements FlexModule {
 
-    private static final ModuleInfo INFO = ModuleInfo.of("discordlink", "Discord Link", "0.17.1")
+    private static final ModuleInfo INFO = ModuleInfo.of("discordlink", "Discord Link", "0.18.0")
             .describedAs("Whitelisting and account links through Discord's /link; Discord roles give LuckPerms groups")
             .by("Raindancer118");
 
@@ -60,6 +64,7 @@ public final class DiscordLinkModule implements FlexModule {
     private HushGroupWatcher hushGroups;
     private HushServerListener hushServer;
     private RunMarker runMarker;
+    private PlaytimeTracker playtime;
 
     @Override
     public ModuleInfo info() {
@@ -127,10 +132,13 @@ public final class DiscordLinkModule implements FlexModule {
             }
         });
         LinkNotes notes = new LinkNotes();
+        GiveawayStore giveaways = new GiveawayStore(context.dataFolder().resolve("giveaway.json"),
+                text -> context.log().warn("{}", text));
         HushControl hush = startHush(context, settings::current, links, new InfoService(new CorePlayerFacts(context.core(), store)),
-                resolver, notes);
+                resolver, notes, giveaways);
         DiscordLinkServices services = new DiscordLinkServices(context.plugin(), server,
-                context.core().messages(), settings::current, context.core().secrets(), codes, links, bot, hush, resolver, notes);
+                context.core().messages(), settings::current, context.core().secrets(), codes, links, bot, hush, resolver, notes,
+                giveaways);
         context.listener(new JoinGateListener(services));
         DiscordLinkCommands.ready(services);
         // Screens for /screen — Core 2.10.0; on an older Core there are simply none.
@@ -156,15 +164,17 @@ public final class DiscordLinkModule implements FlexModule {
 
     /** Hush's Minecraft feed: Core's moderation events and this server's start and stop, sent off-thread in batches. */
     private HushControl startHush(ModuleContext context, java.util.function.Supplier<DiscordLinkSettings> settings,
-                                  LinkService links, InfoService info, PlayerResolver resolver, LinkNotes notes) {
+                                  LinkService links, InfoService info, PlayerResolver resolver, LinkNotes notes,
+                                  GiveawayStore giveaways) {
         HushControl hush = new HushControl(context.core().secrets(), settings, () -> context.core().network().serverId(),
                 System::currentTimeMillis);
         hushFeed = new HushFeed(new HttpHushTransport(), hush::config, System::currentTimeMillis,
                 text -> context.log().warn("{}", text), text -> context.log().info("{}", text), new HushRetryRule(), 2_000);
         hush.feed(hushFeed);
         hushFeed.access(() -> context.plugin().getServer().hasWhitelist() ? "whitelist" : "open");
-        startHushActions(context, links, info, resolver, notes);
+        startHushActions(context, links, info, resolver, notes, giveaways);
         hushFeed.start();
+        startPlaytime(context, settings, links, hush);
         runMarker = new RunMarker(context.dataFolder().resolve("hush-running"));
         hushServer = new HushServerListener(hushFeed::offer, System::currentTimeMillis, runMarker.begin());
         context.listener(hushServer);
@@ -186,7 +196,7 @@ public final class DiscordLinkModule implements FlexModule {
 
     /** Protocol v2: what Discord asks of this server, and the link and group changes Discord's roles follow. */
     private void startHushActions(ModuleContext context, LinkService links, InfoService info, PlayerResolver resolver,
-                                  LinkNotes notes) {
+                                  LinkNotes notes, GiveawayStore giveaways) {
         try {
             hushGroups = new HushGroupWatcher(links, () -> context.core().groups(), hushFeed::offer, System::currentTimeMillis);
             HushActions.Reviews decide;
@@ -205,7 +215,7 @@ public final class DiscordLinkModule implements FlexModule {
             }
             HushActions actions = new HushActions(links, info, () -> context.core().groups(), new RoleSyncRule(),
                     hushFeed::offerNow, System::currentTimeMillis, work -> Scheduling.async(context.plugin(), work), hushGroups,
-                    resolver, notes, decide, submit, bans(context));
+                    resolver, notes, decide, submit, bans(context), giveaways);
             hushFeed.actions(actions::handle);
             links.onChange((link, linked) -> {
                 long at = System.currentTimeMillis();
@@ -218,8 +228,73 @@ public final class DiscordLinkModule implements FlexModule {
         }
     }
 
+    /** Active minutes of linked players, once a minute, sent to Hush every five (see {@link PlaytimeTracker}). */
+    private void startPlaytime(ModuleContext context, java.util.function.Supplier<DiscordLinkSettings> settings,
+                               LinkService links, HushControl hush) {
+        var server = context.plugin().getServer();
+        java.util.Map<java.util.UUID, Long> known = new java.util.concurrent.ConcurrentHashMap<>();
+        playtime = new PlaytimeTracker(
+                id -> links.linkOf(id).map(link -> new PlaytimeCounter.Who(link.name(), link.discord())),
+                DiscordLinkModule::awayIsWatched, DiscordLinkModule::isAway, () -> settings.get().playtimeZone(),
+                () -> settings.get().hushPlaytime() && hush.config().hasToken(),
+                System::currentTimeMillis, hushFeed::offer, id -> firstSeen(context, known, id),
+                context.dataFolder().resolve("playtime.json"), text -> context.log().warn("{}", text));
+        playtime.seed(server.getOnlinePlayers().stream().map(org.bukkit.entity.Player::getUniqueId).toList());
+        context.listener(new PlaytimeListener(playtime));
+        links.onChange((link, linked) -> {
+            if (!linked) {
+                playtime.forget(link.player());
+            }
+        });
+        var timer = Scheduling.asyncTimer(context.plugin(), 60, 60, task -> playtime.tick());
+        if (timer != null) {
+            context.closeWith(timer::cancel);
+        }
+    }
+
+    // Core's FirstSeen only says whether somebody is new; the time itself is in the player history, else Bukkit's.
+    private static Long firstSeen(ModuleContext context, java.util.Map<java.util.UUID, Long> known, java.util.UUID id) {
+        Long cached = known.get(id);
+        if (cached != null) {
+            return cached;
+        }
+        Long at = null;
+        try {
+            at = context.core().playerHistory().flatMap(history -> history.firstSeen(id)).orElse(null);
+        } catch (LinkageError | RuntimeException unavailable) {
+            // Bukkit's below
+        }
+        if (at == null || at <= 0) {
+            long played = org.bukkit.Bukkit.getOfflinePlayer(id).getFirstPlayed();
+            at = played > 0 ? played : null;
+        }
+        if (at != null) {
+            known.put(id, at);
+        }
+        return at;
+    }
+
+    private static boolean awayIsWatched() {
+        try {
+            return de.raindancer.core.social.presence.Away.isKnown();
+        } catch (LinkageError olderCore) {
+            return false;
+        }
+    }
+
+    private static boolean isAway(java.util.UUID player) {
+        try {
+            return de.raindancer.core.social.presence.Away.isAway(player);
+        } catch (LinkageError olderCore) {
+            return false;
+        }
+    }
+
     @Override
     public void disable() {
+        if (playtime != null) {
+            playtime.close();
+        }
         if (hushGroups != null) {
             hushGroups.close();
         }
